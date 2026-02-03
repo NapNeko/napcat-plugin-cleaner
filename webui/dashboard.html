@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>缓存清理</title>
+  <style>
+    :root {
+      --primary-color: #007aff;
+      --success-color: #34c759;
+      --danger-color: #ff3b30;
+      --warning-color: #ff9500;
+      --bg-body: #f5f5f7;
+      --bg-card: #ffffff;
+      --text-main: #1d1d1f;
+      --text-secondary: #86868b;
+      --border-color: #d2d2d7;
+      --item-bg: #f5f5f7;
+      --item-hover: #e8e8ed;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      margin: 0;
+      padding: 20px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .section {
+      background: var(--bg-card);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 20px 0;
+      color: var(--text-main);
+    }
+
+    .account-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .account-item {
+      background: var(--item-bg);
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .account-item:hover {
+      background: var(--item-hover);
+    }
+
+    .account-item.selected {
+      border-color: var(--primary-color);
+      background: #f0f7ff;
+    }
+
+    .account-item .uin {
+      display: block;
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
+
+    .account-item .size {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .account-item .badge {
+      font-size: 11px;
+      color: var(--primary-color);
+      background: #e5f1ff;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-top: 8px;
+      display: inline-block;
+    }
+
+    .stats-container {
+      margin-top: 20px;
+    }
+
+    .stats-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 14px;
+    }
+
+    .stats-table th {
+      text-align: left;
+      color: var(--text-secondary);
+      font-weight: 500;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    .stats-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #f2f2f2;
+      vertical-align: middle;
+    }
+
+    .stats-table th:last-child,
+    .stats-table td:last-child {
+      text-align: right;
+    }
+
+    .stats-table th:nth-child(2),
+    .stats-table td:nth-child(2),
+    .stats-table th:nth-child(3),
+    .stats-table td:nth-child(3) {
+      text-align: right;
+    }
+
+    .stats-table .size {
+      font-weight: 500;
+      font-family: SF Mono, Menlo, monospace;
+    }
+
+    .estimated-size {
+      color: var(--success-color);
+      font-family: SF Mono, Menlo, monospace;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
+      margin: 20px 0;
+    }
+
+    .option-item {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .modal-options-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    @media (max-width: 600px) {
+      .account-list {
+        grid-template-columns: 1fr;
+      }
+
+      .options-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      .stats-table th,
+      .stats-table td {
+        padding: 8px;
+        font-size: 12px;
+      }
+
+      /* Hide some columns on mobile if needed, or allow scroll */
+      .stats-table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+
+    #modalOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: var(--bg-card);
+      z-index: 2000;
+      overflow-y: auto;
+    }
+
+    #modalOverlay>div {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 24px;
+      box-sizing: border-box;
+      min-height: 100%;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-section {
+      margin-bottom: 24px;
+    }
+
+    .modal-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .option-item input[type="checkbox"] {
+      margin-right: 10px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary-color);
+    }
+
+    .retain-days {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #f2f2f2;
+      font-size: 14px;
+    }
+
+    .retain-days input {
+      width: 60px;
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      padding: 10px 24px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .btn-primary {
+      background-color: var(--primary-color);
+      color: white;
+    }
+
+    .btn-secondary {
+      background-color: var(--item-bg);
+      color: var(--text-main);
+    }
+
+    .btn-danger {
+      background-color: #fff1f0;
+      color: var(--danger-color);
+      border: 1px solid #ffa39e;
+    }
+
+    .btn:hover {
+      opacity: 0.8;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .msg {
+      margin-top: 16px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .msg-success {
+      background: #f6ffed;
+      border: 1px solid #b7eb8f;
+      color: #52c41a;
+      display: block;
+    }
+
+    .msg-error {
+      background: #fff2f0;
+      border: 1px solid #ffccc7;
+      color: #ff4d4f;
+      display: block;
+    }
+
+    .schedule-item {
+      padding: 16px;
+      background: var(--item-bg);
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+
+    .schedule-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .schedule-info {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .schedule-info b {
+      color: var(--text-main);
+      margin-right: 8px;
+    }
+
+    .schedule-status {
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .schedule-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .footer {
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin: 40px 0 20px;
+    }
+
+    input:focus {
+      outline: 2px solid #007aff22;
+      border-color: var(--primary-color);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container" id="app">
+    <div class="section">
+      <h2>账号列表</h2>
+      <div id="accounts" class="account-list"></div>
+      <div id="stats" class="stats-container"></div>
+    </div>
+
+    <div class="section">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="margin: 0;">清理配置 (默认)</h2>
+        <button class="btn btn-primary" id="saveConfigBtn" style="padding: 6px 16px; font-size: 13px;">保存配置</button>
+      </div>
+      <div id="options" class="options-grid"></div>
+      <div class="retain-days">
+        <span>文件保留天数</span>
+        <input type="number" id="optRetainDays" min="0" max="365" onchange="fetchStats()">
+        <span style="color: var(--text-secondary)">超过此期限的文件将被清理</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2 style="margin-bottom: 20px;">手动清理</h2>
+      <div class="actions" style="margin-top: 0;">
+        <button class="btn btn-primary" id="cleanBtn">立即使用上方配置清理</button>
+        <button class="btn btn-secondary" id="refreshBtn">刷新数据</button>
+      </div>
+      <div id="msg"></div>
+    </div>
+
+    <div class="section">
+      <h2>定时任务</h2>
+      <div id="schedules"></div>
+      <button class="btn btn-secondary" style="margin-top: 16px; width: 100%;" id="addScheduleBtn">新建定时清理任务</button>
+    </div>
+
+    <div id="modalOverlay">
+      <div>
+        <div class="modal-header">
+          <h2 style="margin:0; font-size: 24px;">新建定时任务</h2>
+          <button class="btn btn-secondary" onclick="closeModal()">✕</button>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">基本信息</div>
+          <div style="margin-bottom: 12px;">
+            <label
+              style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">任务名称</label>
+            <input type="text" id="taskNameInput" placeholder="例如：每日自动清理"
+              style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-size: 14px;">
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">选择账号 (默认全部)</div>
+          <div id="modalAccounts" class="account-list"></div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">执行计划</div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <label
+                style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">执行频率</label>
+              <select id="taskFrequencySelect"
+                style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-size: 14px; background-color: var(--item-bg);"
+                onchange="toggleFreqOptions()">
+                <option value="daily">每天</option>
+                <option value="weekly">每周</option>
+                <option value="interval">间隔天数</option>
+              </select>
+            </div>
+
+            <div>
+              <label style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">执行时间
+                (24h)</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="number" id="taskHourInput" min="0" max="23" placeholder="03"
+                  style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; font-size: 14px;">
+                <span>:</span>
+                <input type="number" id="taskMinuteInput" min="0" max="59" placeholder="00"
+                  style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; text-align: center; font-size: 14px;">
+              </div>
+            </div>
+          </div>
+
+          <div id="freqOptionWeekly" style="display: none; margin-top: 12px;">
+            <label
+              style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">选择星期</label>
+            <select id="taskWeeklySelect"
+              style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; font-size: 14px; background-color: var(--item-bg);">
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="0">周日</option>
+            </select>
+          </div>
+
+          <div id="freqOptionInterval" style="display: none; align-items: center; gap: 8px; margin-top: 12px;">
+            <span>每</span>
+            <input type="number" id="taskIntervalInput" min="1" value="3"
+              style="width: 80px; padding: 8px; border: 1px solid var(--border-color); border-radius: 8px; text-align: center;">
+            <span>天执行一次</span>
+          </div>
+        </div>
+
+        <div class="modal-section">
+          <div class="modal-section-title">清理配置</div>
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">文件保留天数
+              (0表示不保留)</label>
+            <input type="number" id="taskRetainDaysInput" min="0" max="365" value="7"
+              style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-size: 14px;">
+          </div>
+
+          <label style="display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">清理内容</label>
+          <div id="modalOptions" class="modal-options-grid"></div>
+        </div>
+
+        <div
+          style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+          <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+          <button class="btn btn-primary" onclick="confirmAddSchedule()">保存任务</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="confirmModalOverlay"
+      style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 3000; align-items: center; justify-content: center;">
+      <div
+        style="background: var(--bg-card); padding: 24px; border-radius: 12px; width: 320px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 90%;">
+        <h3 style="margin: 0 0 12px 0; font-size: 18px;">确认操作</h3>
+        <p id="confirmMessage" style="margin: 0 0 20px 0; color: var(--text-secondary); font-size: 14px;">确定要执行此操作吗？</p>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn btn-secondary" id="confirmCancelBtn">取消</button>
+          <button class="btn btn-danger" id="confirmOkBtn">确定</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      NapCat 清理插件 | 多账号支持 | 自动维护
+    </div>
+  </div>
+
+  <script>
+    const apiBase = '/api/Plugin/ext/napcat-plugin-cleaner';
+    const token = localStorage.getItem('token') || '';
+
+    let state = {
+      selectedAccounts: [],
+      allAccounts: [],
+      defaultOptions: {},
+      schedules: []
+    };
+
+    function $ (id) { return document.getElementById(id); }
+
+    function showModal () {
+      document.body.style.overflow = 'hidden';
+      $("modalOverlay").style.display = "block";
+      $("taskNameInput").value = "自动清理任务";
+      $("taskHourInput").value = "03";
+      $("taskMinuteInput").value = "00";
+      $("taskFrequencySelect").value = "daily";
+      $("taskRetainDaysInput").value = $("optRetainDays").value || "7";
+      renderModalOptions(state.defaultOptions);
+      renderModalAccounts();
+      toggleFreqOptions();
+      $("taskNameInput").focus();
+    }
+
+    function closeModal () {
+      document.body.style.overflow = '';
+      $("modalOverlay").style.display = "none";
+    }
+
+    function toggleFreqOptions () {
+      const val = $("taskFrequencySelect").value;
+      $("freqOptionWeekly").style.display = val === 'weekly' ? 'block' : 'none';
+      $("freqOptionInterval").style.display = val === 'interval' ? 'flex' : 'none';
+    }
+
+    async function confirmAddSchedule () {
+      const name = $("taskNameInput").value.trim();
+      const h = parseInt($("taskHourInput").value) || 0;
+      const m = parseInt($("taskMinuteInput").value) || 0;
+      const retainDays = parseInt($("taskRetainDaysInput").value) || 0;
+      const freq = $("taskFrequencySelect").value;
+      let freqVal = 0;
+
+      if (freq === 'weekly') {
+        freqVal = parseInt($("taskWeeklySelect").value);
+      } else if (freq === 'interval') {
+        freqVal = parseInt($("taskIntervalInput").value) || 1;
+      }
+
+      if (!name) {
+        showMsg('请输入任务名称', 'error');
+        return;
+      }
+
+      if (h < 0 || h > 23 || m < 0 || m > 59) {
+        showMsg('请输入有效的时间', 'error');
+        return;
+      }
+
+      const options = getModalOptions();
+
+      const accounts = [];
+      document.querySelectorAll('.modal-account-checkbox').forEach(cb => {
+        if (cb.checked) accounts.push(cb.value);
+      });
+
+      await request(`${apiBase}/schedules`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name,
+          cronHour: h,
+          cronMinute: m,
+          frequency: freq,
+          frequencyValue: freqVal,
+          retainDays,
+          options,
+          accounts,
+          enabled: true
+        })
+      });
+
+      closeModal();
+      fetchSchedules();
+      showMsg('定时任务已添加', 'success');
+    }
+
+    async function request (url, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...options.headers
+      };
+      const res = await fetch(url, { ...options, headers });
+      return await res.json();
+    }
+
+    function showMsg (text, type) {
+      const el = $("msg");
+      el.textContent = text;
+      el.className = `msg msg-${type}`;
+      setTimeout(() => { el.className = 'msg'; }, 4000);
+    }
+
+    async function fetchAccounts () {
+      const data = await request(`${apiBase}/accounts`);
+      if (data.code !== 0) return;
+      state.allAccounts = data.data.accounts;
+      if (state.selectedAccounts.length === 0) {
+        state.selectedAccounts = [data.data.currentUin];
+      }
+      renderAccounts();
+      fetchStats();
+    }
+
+    function renderAccounts () {
+      let html = '';
+      state.allAccounts.forEach(acc => {
+        const isSelected = state.selectedAccounts.includes(acc.uin);
+        html += `
+        <div class="account-item ${isSelected ? 'selected' : ''}" onclick="toggleAccount('${acc.uin}')">
+          <span class="uin">${acc.uin}</span>
+          <span class="size">${acc.stats.totalSize}</span>
+          ${acc.isCurrent ? '<br><span class="badge">当前已登录</span>' : ''}
+        </div>
+      `;
+      });
+      $("accounts").innerHTML = html;
+    }
+
+    window.toggleAccount = function (uin) {
+      if (state.selectedAccounts.includes(uin)) {
+        state.selectedAccounts = state.selectedAccounts.filter(x => x !== uin);
+      } else {
+        state.selectedAccounts.push(uin);
+      }
+      renderAccounts();
+      fetchStats();
+    };
+
+    async function fetchStats () {
+      if (state.selectedAccounts.length === 0) {
+        $("stats").innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">请选择至少一个账号进行管理</div>';
+        return;
+      }
+
+      const retainDays = parseInt($("optRetainDays").value) || 0;
+
+      let html = '';
+      for (const uin of state.selectedAccounts) {
+        const data = await request(`${apiBase}/stats/${uin}?retainDays=${retainDays}`);
+        if (data.code !== 0) continue;
+
+        html += `
+        <div style="margin-bottom: 24px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+          <div style="padding: 12px 16px; background: var(--item-bg); border-bottom: 1px solid var(--border-color); font-weight: 500;">账号 ${uin}</div>
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>清理类别</th>
+                <th>文件总数</th>
+                <th>占用空间</th>
+                <th>预计清理 (保留${retainDays}天)</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+        const cats = {
+          video: '视频文件',
+          videoThumb: '视频封面',
+          ptt: '语音消息',
+          file: '普通文件',
+          log: '程序日志',
+          napCatData: 'NapCat 数据',
+          napCatTemp: 'NapCat 临时文件'
+        };
+
+        for (const [key, label] of Object.entries(cats)) {
+          const v = data.data.formattedStats.categories[key] || { files: 0, size: '0 B', estimatedCleanSize: '0 B' };
+          html += `
+          <tr>
+            <td>${label}</td>
+            <td class="files">${v.files}</td>
+            <td class="size" style="color: var(--warning-color)">${v.size}</td>
+            <td class="estimated-size">${v.estimatedCleanSize}</td>
+          </tr>
+        `;
+        }
+
+        // 总计行
+        html += `
+          <tr style="background: #fafafa; font-weight: 500;">
+            <td>总计</td>
+            <td class="files">${data.data.formattedStats.totalFiles}</td>
+            <td class="size" style="color: var(--warning-color)">${data.data.formattedStats.totalSize}</td>
+            <td class="estimated-size">${data.data.formattedStats.estimatedCleanSize}</td>
+          </tr>
+      `;
+
+        html += `</tbody></table></div>`;
+      }
+      $("stats").innerHTML = html;
+    }
+
+    const configItems = [
+      { id: 'optVideo', label: '清理视频', key: 'enableVideo' },
+      { id: 'optVideoThumb', label: '清理视频封面', key: 'enableVideoThumb' },
+      { id: 'optPtt', label: '清理语音', key: 'enablePtt' },
+      { id: 'optFile', label: '清理收发文件', key: 'enableFile' },
+      { id: 'optLog', label: '清理运行日志', key: 'enableLog' },
+      { id: 'optNapCatData', label: '清理 NapCat 核心数据', key: 'enableNapCatData' },
+      { id: 'optNapCatTemp', label: '清理 NapCat 临时文件', key: 'enableNapCatTemp' }
+    ];
+
+    async function fetchConfig () {
+      const data = await request(`${apiBase}/config`);
+      if (data.code !== 0) return;
+      state.defaultOptions = data.data.defaultOptions;
+      renderOptions();
+    }
+
+    function renderOptions () {
+      const opts = state.defaultOptions;
+      let html = '';
+      configItems.forEach(item => {
+        html += `
+        <label class="option-item">
+          <input type="checkbox" id="${item.id}" ${opts[item.key] ? 'checked' : ''}>
+          ${item.label}
+        </label>
+      `;
+      });
+      $("options").innerHTML = html;
+      $("optRetainDays").value = opts.retainDays;
+    }
+
+    function getModalOptions () {
+      const opts = {};
+      configItems.forEach(item => {
+        const el = document.getElementById(`modal_${item.id}`);
+        opts[item.key] = el ? el.checked : false;
+      });
+      return opts;
+    }
+
+    function renderModalOptions (defaults = {}) {
+      let html = '';
+      configItems.forEach(item => {
+        const isChecked = defaults[item.key] !== undefined ? defaults[item.key] : (state.defaultOptions[item.key] || false);
+
+        html += `
+        <label class="option-item" style="font-size: 13px;">
+          <input type="checkbox" id="modal_${item.id}" ${isChecked ? 'checked' : ''}>
+          ${item.label}
+        </label>
+      `;
+      });
+      $("modalOptions").innerHTML = html;
+    }
+
+    function renderModalAccounts () {
+      let html = '';
+      if (state.allAccounts.length === 0) {
+        html = '<div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:10px;">暂无账号信息</div>';
+      } else {
+        state.allAccounts.forEach(acc => {
+          html += `
+            <div class="account-item selected" onclick="toggleModalAccount(this)" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border-color: var(--primary-color); background: #f0f7ff;">
+              <div style="text-align: left;">
+                <span class="uin" style="margin:0; font-size:14px;">${acc.uin}</span>
+                <span class="size" style="font-size:12px;">${acc.stats.totalSize}</span>
+              </div>
+              <input type="checkbox" class="modal-account-checkbox" value="${acc.uin}" checked style="pointer-events: none; width:18px; height:18px; accent-color: var(--primary-color);">
+            </div>
+          `;
+        });
+      }
+      $("modalAccounts").innerHTML = html;
+    }
+
+    window.toggleModalAccount = function (el) {
+      const checkbox = el.querySelector('input[type="checkbox"]');
+      checkbox.checked = !checkbox.checked;
+      if (checkbox.checked) {
+        el.classList.add('selected');
+        el.style.backgroundColor = '#f0f7ff';
+        el.style.borderColor = 'var(--primary-color)';
+      } else {
+        el.classList.remove('selected');
+        el.style.backgroundColor = 'var(--item-bg)';
+        el.style.borderColor = 'transparent';
+      }
+    };
+
+    $("saveConfigBtn").onclick = async function () {
+      const options = {
+        enableVideo: $("optVideo").checked,
+        enableVideoThumb: $("optVideoThumb").checked,
+        enablePtt: $("optPtt").checked,
+        enableFile: $("optFile").checked,
+        enableLog: $("optLog").checked,
+        enableNapCatData: $("optNapCatData").checked,
+        enableNapCatTemp: $("optNapCatTemp").checked,
+        retainDays: parseInt($("optRetainDays").value) || 7
+      };
+
+      await request(`${apiBase}/config/options`, {
+        method: 'POST',
+        body: JSON.stringify(options)
+      });
+
+      state.defaultOptions = { ...state.defaultOptions, ...options };
+      showMsg('默认配置已保存', 'success');
+    };
+
+    $("cleanBtn").onclick = async function () {
+      const options = {
+        enableVideo: $("optVideo").checked,
+        enableVideoThumb: $("optVideoThumb").checked,
+        enablePtt: $("optPtt").checked,
+        enableFile: $("optFile").checked,
+        enableLog: $("optLog").checked,
+        enableNapCatData: $("optNapCatData").checked,
+        enableNapCatTemp: $("optNapCatTemp").checked,
+        retainDays: parseInt($("optRetainDays").value) || 7
+      };
+
+      $("cleanBtn").disabled = true;
+      showMsg('正在清理缓存文件，请稍候...', 'info');
+
+      const data = await request(`${apiBase}/clean`, {
+        method: 'POST',
+        body: JSON.stringify({ accounts: state.selectedAccounts, options })
+      });
+
+      if (data.code === 0) {
+        showMsg(`成功释放空间: ${data.data.totalSize}`, 'success');
+        fetchStats();
+      } else {
+        showMsg(`操作失败: ${data.message}`, 'error');
+      }
+      $("cleanBtn").disabled = false;
+    };
+
+    $("refreshBtn").onclick = () => { fetchAccounts(); fetchConfig(); };
+
+    async function fetchSchedules () {
+      const data = await request(`${apiBase}/schedules`);
+      if (data.code !== 0) return;
+      state.schedules = data.data;
+      renderSchedules();
+    }
+
+    function renderSchedules () {
+      let html = '';
+      if (state.schedules.length === 0) {
+        html = '<div style="color: var(--text-secondary); font-size: 14px;">暂未设置定时清理任务</div>';
+      }
+      state.schedules.forEach(s => {
+        let freqText = '每天';
+        if (s.frequency === 'weekly') {
+          const days = ['日', '一', '二', '三', '四', '五', '六'];
+          freqText = `每周${days[s.frequencyValue] || ''}`;
+        } else if (s.frequency === 'interval') {
+          freqText = `每${s.frequencyValue}天`;
+        }
+
+        html += `
+        <div class="schedule-item">
+          <div class="schedule-header">
+            <div class="schedule-info">
+              <b>${s.name}</b>
+              ${freqText} ${s.cronHour}:${s.cronMinute.toString().padStart(2, '0')} 运行
+              <span style="margin-left: 8px; font-size: 12px; color: var(--text-secondary); background: rgba(0,0,0,0.05); padding: 2px 6px; border-radius: 4px;">保留 ${s.options.retainDays} 天</span>
+            </div>
+            <span style="font-size: 12px; color: ${s.enabled ? 'var(--success-color)' : 'var(--text-secondary)'}">
+              ${s.enabled ? '任务进行中' : '已暂停'}
+            </span>
+          </div>
+          <div class="schedule-info">
+            适用账号: ${s.accounts.length ? s.accounts.join(', ') : '全部账号'}
+          </div>
+          <div class="schedule-status" style="color: var(--text-secondary)">
+            上次运行: ${s.lastRun ? new Date(s.lastRun).toLocaleString() : '从无'} | 
+            结果: ${s.lastResult || '--'}
+          </div>
+          <div class="schedule-actions">
+            <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" onclick="runSchedule('${s.id}')">立即触发</button>
+            <button class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;" onclick="toggleSchedule('${s.id}', ${!s.enabled})">${s.enabled ? '暂停' : '恢复'}</button>
+            <button class="btn btn-danger" style="padding: 4px 12px; font-size: 12px;" onclick="deleteSchedule('${s.id}')">移除</button>
+          </div>
+        </div>
+      `;
+      });
+      $("schedules").innerHTML = html;
+    }
+
+    window.runSchedule = async (id) => {
+      const data = await request(`${apiBase}/schedules/${id}/run`, { method: 'POST' });
+      if (data.code === 0) {
+        showMsg('任务已成功触发并完成', 'success');
+        fetchSchedules();
+      }
+    };
+
+    window.toggleSchedule = async (id, enabled) => {
+      await request(`${apiBase}/schedules/${id}`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled })
+      });
+      fetchSchedules();
+    };
+
+    function showConfirm (message) {
+      return new Promise((resolve) => {
+        const overlay = $("confirmModalOverlay");
+        const msgEl = $("confirmMessage");
+        const okBtn = $("confirmOkBtn");
+        const cancelBtn = $("confirmCancelBtn");
+
+        msgEl.textContent = message;
+        overlay.style.display = "flex";
+
+        const cleanup = () => {
+          overlay.style.display = "none";
+          okBtn.onclick = null;
+          cancelBtn.onclick = null;
+        };
+
+        okBtn.onclick = () => {
+          cleanup();
+          resolve(true);
+        };
+
+        cancelBtn.onclick = () => {
+          cleanup();
+          resolve(false);
+        };
+      });
+    }
+
+    window.deleteSchedule = async (id) => {
+      if (!await showConfirm('确定要删除此定时清理任务吗？')) return;
+      await request(`${apiBase}/schedules/${id}`, { method: 'DELETE' });
+      fetchSchedules();
+    };
+
+    $("addScheduleBtn").onclick = async () => {
+      showModal();
+    };
+
+    // Init
+    fetchAccounts();
+    fetchConfig();
+    fetchSchedules();
+  </script>
+</body>
+
+</html>
