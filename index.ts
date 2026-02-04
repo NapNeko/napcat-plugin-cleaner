@@ -1,6 +1,8 @@
 import type { PluginModule, PluginLogger } from 'napcat-types/napcat-onebot/network/plugin-manger';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import os from 'os';
 
 let logger: PluginLogger | null = null;
 
@@ -8,8 +10,11 @@ interface CleanOptions {
   enableVideo: boolean;
   enableVideoThumb: boolean;
   enablePtt: boolean;
+  enablePic: boolean;
   enableFile: boolean;
   enableLog: boolean;
+  enableLogCache: boolean;
+  enableNtTemp: boolean;
   enableNapCatData: boolean;
   enableNapCatTemp: boolean;
   retainDays: number;
@@ -38,8 +43,11 @@ const defaultCleanOptions: CleanOptions = {
   enableVideo: true,
   enableVideoThumb: true,
   enablePtt: true,
+  enablePic: true,
   enableFile: true,
   enableLog: true,
+  enableLogCache: true,
+  enableNtTemp: true,
   enableNapCatData: false,
   enableNapCatTemp: true,
   retainDays: 7,
@@ -54,6 +62,25 @@ let currentConfig: CleanerPluginConfig = {
 const scheduleTimers: Map<string, NodeJS.Timeout> = new Map();
 let dataPathGlobal: string = '';
 
+// 平台检测
+const isWindows = os.platform() === 'win32';
+
+// 存储当前账号的 uid (用于 Linux hash 计算)
+let currentUid: string = '';
+
+// 计算 Linux 路径的 hash: md5(md5(uid) + "nt_kernel")
+function computeNtHash(uid: string): string {
+  const md5Uid = crypto.createHash('md5').update(uid).digest('hex');
+  const hash = crypto.createHash('md5').update(md5Uid + 'nt_kernel').digest('hex');
+  return hash;
+}
+
+// 存储 uin 到 uid 的映射 (用于多账号场景)
+const uinToUidMap: Map<string, string> = new Map();
+
+// 存储 uin 到 hash 目录的映射
+const uinToHashDirMap: Map<string, string> = new Map();
+
 // 清理统计
 interface CleanStats {
   totalFiles: number;
@@ -67,7 +94,7 @@ interface CleanStats {
 }
 
 // 格式化文件大小
-function formatSize (bytes: number): string {
+function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -76,7 +103,7 @@ function formatSize (bytes: number): string {
 }
 
 // 清理目录中的文件
-function cleanDirectory (dirPath: string, retainDays: number): { files: number; size: number; } {
+function cleanDirectory(dirPath: string, retainDays: number): { files: number; size: number; } {
   let files = 0;
   let size = 0;
 
@@ -126,7 +153,7 @@ function cleanDirectory (dirPath: string, retainDays: number): { files: number; 
 }
 
 // 获取时间格式的子目录 (如 2025-05, 2026-01)
-function getDateSubdirs (basePath: string): string[] {
+function getDateSubdirs(basePath: string): string[] {
   if (!fs.existsSync(basePath)) {
     return [];
   }
@@ -141,57 +168,189 @@ function getDateSubdirs (basePath: string): string[] {
   }
 }
 
+// 获取用户数据目录的 nt_data 路径
+function getNtDataPath(dataPath: string, uin: string): string | null {
+  if (isWindows) {
+    // Windows: {dataPath}/{uin}/nt_qq/nt_data
+    const ntDataPath = path.join(dataPath, uin, 'nt_qq', 'nt_data');
+    if (fs.existsSync(ntDataPath)) {
+      return ntDataPath;
+    }
+    return null;
+  } else {
+    // Linux: dataPath 已经是 /app/.config/QQ，直接拼接 nt_qq_{hash}
+    // 首先检查是否有缓存的映射
+    const cachedHashDir = uinToHashDirMap.get(uin);
+    if (cachedHashDir) {
+      const ntDataPath = path.join(cachedHashDir, 'nt_data');
+      if (fs.existsSync(ntDataPath)) {
+        return ntDataPath;
+      }
+    }
+
+    // 尝试通过 uid 计算 hash
+    const uid = uinToUidMap.get(uin);
+    if (uid) {
+      const hash = computeNtHash(uid);
+      const hashDir = path.join(dataPath, `nt_qq_${hash}`);
+      const ntDataPath = path.join(hashDir, 'nt_data');
+      if (fs.existsSync(ntDataPath)) {
+        uinToHashDirMap.set(uin, hashDir);
+        return ntDataPath;
+      }
+    }
+
+    // 如果没有找到，扫描所有 nt_qq_* 目录
+    if (fs.existsSync(dataPath)) {
+      try {
+        const entries = fs.readdirSync(dataPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory() && /^nt_qq_[a-f0-9]{32}$/.test(entry.name)) {
+            const hashDir = path.join(dataPath, entry.name);
+            const ntDataPath = path.join(hashDir, 'nt_data');
+            if (fs.existsSync(ntDataPath)) {
+              // 缓存找到的第一个目录（单账号场景）
+              if (!uinToHashDirMap.has(uin)) {
+                uinToHashDirMap.set(uin, hashDir);
+              }
+              return ntDataPath;
+            }
+          }
+        }
+      } catch {
+        // 忽略
+      }
+    }
+
+    return null;
+  }
+}
+
+// 获取用户的 nt_temp 路径
+function getNtTempPath(dataPath: string, uin: string): string | null {
+  if (isWindows) {
+    return null; // Windows 没有 nt_temp
+  }
+
+  const cachedHashDir = uinToHashDirMap.get(uin);
+  if (cachedHashDir) {
+    const ntTempPath = path.join(cachedHashDir, 'nt_temp');
+    if (fs.existsSync(ntTempPath)) {
+      return ntTempPath;
+    }
+  }
+  return null;
+}
+
+// 获取 NapCat 目录路径
+function getNapCatPath(dataPath: string): string {
+  if (isWindows) {
+    return path.join(dataPath, 'NapCat');
+  } else {
+    return path.join(dataPath, 'NapCat');
+  }
+}
+
 // 获取所有需要清理的目录
-function getCleanablePaths (dataPath: string, uin: string): {
+function getCleanablePaths(dataPath: string, uin: string): {
   video: string[];
   videoThumb: string[];
   ptt: string[];
+  pic: string[];
   file: string[];
   log: string[];
+  logCache: string[];
+  ntTemp: string[];
   napCatData: string[];
   napCatTemp: string[];
 } {
-  const uinPath = path.join(dataPath, uin);
-  const ntDataPath = path.join(uinPath, 'nt_qq', 'nt_data');
+  const ntDataPath = getNtDataPath(dataPath, uin);
+
+  const result = {
+    video: [] as string[],
+    videoThumb: [] as string[],
+    ptt: [] as string[],
+    pic: [] as string[],
+    file: [] as string[],
+    log: [] as string[],
+    logCache: [] as string[],
+    ntTemp: [] as string[],
+    napCatData: [] as string[],
+    napCatTemp: [] as string[],
+  };
+
+  if (!ntDataPath) {
+    return result;
+  }
 
   // 视频目录
   const videoBase = path.join(ntDataPath, 'Video');
   const videoDirs = getDateSubdirs(videoBase);
-  const video = videoDirs.flatMap(dir => {
+  result.video = videoDirs.flatMap(dir => {
     const oriPath = path.join(dir, 'Ori');
     return fs.existsSync(oriPath) ? [oriPath] : [dir];
   });
-  const videoThumb = videoDirs.flatMap(dir => {
+  result.videoThumb = videoDirs.flatMap(dir => {
     const thumbPath = path.join(dir, 'Thumb');
-    return fs.existsSync(thumbPath) ? [thumbPath] : [];
+    const thumbTempPath = path.join(dir, 'ThumbTemp');
+    const paths: string[] = [];
+    if (fs.existsSync(thumbPath)) paths.push(thumbPath);
+    if (fs.existsSync(thumbTempPath)) paths.push(thumbTempPath);
+    return paths;
   });
 
   // 语音目录
   const pttBase = path.join(ntDataPath, 'Ptt');
   const pttDirs = getDateSubdirs(pttBase);
-  const ptt = pttDirs.flatMap(dir => {
+  result.ptt = pttDirs.flatMap(dir => {
+    const oriPath = path.join(dir, 'Ori');
+    const oriTempPath = path.join(dir, 'OriTemp');
+    const paths: string[] = [];
+    if (fs.existsSync(oriPath)) paths.push(oriPath);
+    if (fs.existsSync(oriTempPath)) paths.push(oriTempPath);
+    return paths.length > 0 ? paths : [dir];
+  });
+
+  // 图片目录 (Linux 特有，Windows 也兼容检查)
+  const picBase = path.join(ntDataPath, 'Pic');
+  const picDirs = getDateSubdirs(picBase);
+  result.pic = picDirs.flatMap(dir => {
     const oriPath = path.join(dir, 'Ori');
     return fs.existsSync(oriPath) ? [oriPath] : [dir];
   });
 
   // 文件目录
   const fileOri = path.join(ntDataPath, 'File', 'Ori');
-  const file = fs.existsSync(fileOri) ? [fileOri] : [];
+  const fileThumb = path.join(ntDataPath, 'File', 'Thumb');
+  const fileThumbTemp = path.join(ntDataPath, 'File', 'ThumbTemp');
+  if (fs.existsSync(fileOri)) result.file.push(fileOri);
+  if (fs.existsSync(fileThumb)) result.file.push(fileThumb);
+  if (fs.existsSync(fileThumbTemp)) result.file.push(fileThumbTemp);
 
   // 日志目录
   const logPath = path.join(ntDataPath, 'log');
-  const log = fs.existsSync(logPath) ? [logPath] : [];
+  if (fs.existsSync(logPath)) result.log.push(logPath);
+
+  // 日志缓存目录
+  const logCachePath = path.join(ntDataPath, 'log-cache');
+  if (fs.existsSync(logCachePath)) result.logCache.push(logCachePath);
+
+  // nt_temp 目录 (Linux)
+  const ntTempPath = getNtTempPath(dataPath, uin);
+  if (ntTempPath) result.ntTemp.push(ntTempPath);
 
   // NapCat 目录
-  const napCatPath = path.join(dataPath, 'NapCat');
-  const napCatData = [path.join(napCatPath, 'data')].filter(p => fs.existsSync(p));
-  const napCatTemp = [path.join(napCatPath, 'temp')].filter(p => fs.existsSync(p));
+  const napCatPath = getNapCatPath(dataPath);
+  const napCatDataPath = path.join(napCatPath, 'data');
+  const napCatTempPath = path.join(napCatPath, 'temp');
+  if (fs.existsSync(napCatDataPath)) result.napCatData.push(napCatDataPath);
+  if (fs.existsSync(napCatTempPath)) result.napCatTemp.push(napCatTempPath);
 
-  return { video, videoThumb, ptt, file, log, napCatData, napCatTemp };
+  return result;
 }
 
 // 扫描可清理的缓存
-function scanCache (dataPath: string, uin: string, retainDays: number = 0): CleanStats {
+function scanCache(dataPath: string, uin: string, retainDays: number = 0): CleanStats {
   const paths = getCleanablePaths(dataPath, uin);
   const stats: CleanStats = {
     totalFiles: 0,
@@ -200,8 +359,11 @@ function scanCache (dataPath: string, uin: string, retainDays: number = 0): Clea
       video: { files: 0, size: 0 },
       videoThumb: { files: 0, size: 0 },
       ptt: { files: 0, size: 0 },
+      pic: { files: 0, size: 0 },
       file: { files: 0, size: 0 },
       log: { files: 0, size: 0 },
+      logCache: { files: 0, size: 0 },
+      ntTemp: { files: 0, size: 0 },
       napCatData: { files: 0, size: 0 },
       napCatTemp: { files: 0, size: 0 },
     },
@@ -227,7 +389,7 @@ function scanCache (dataPath: string, uin: string, retainDays: number = 0): Clea
 }
 
 // 获取目录统计，支持时间过滤
-function getDirStatsWithFilter (dirPath: string, now: number, retainMs: number): { files: number; size: number; } {
+function getDirStatsWithFilter(dirPath: string, now: number, retainMs: number): { files: number; size: number; } {
   let files = 0;
   let size = 0;
 
@@ -264,7 +426,7 @@ function getDirStatsWithFilter (dirPath: string, now: number, retainMs: number):
 }
 
 // 执行清理 - 使用 CleanOptions
-function executeClean (dataPath: string, uin: string, options: CleanOptions): CleanStats {
+function executeClean(dataPath: string, uin: string, options: CleanOptions): CleanStats {
   const paths = getCleanablePaths(dataPath, uin);
   const stats: CleanStats = {
     totalFiles: 0,
@@ -273,8 +435,11 @@ function executeClean (dataPath: string, uin: string, options: CleanOptions): Cl
       video: { files: 0, size: 0 },
       videoThumb: { files: 0, size: 0 },
       ptt: { files: 0, size: 0 },
+      pic: { files: 0, size: 0 },
       file: { files: 0, size: 0 },
       log: { files: 0, size: 0 },
+      logCache: { files: 0, size: 0 },
+      ntTemp: { files: 0, size: 0 },
       napCatData: { files: 0, size: 0 },
       napCatTemp: { files: 0, size: 0 },
     },
@@ -284,8 +449,11 @@ function executeClean (dataPath: string, uin: string, options: CleanOptions): Cl
     video: options.enableVideo,
     videoThumb: options.enableVideoThumb,
     ptt: options.enablePtt,
+    pic: options.enablePic,
     file: options.enableFile,
     log: options.enableLog,
+    logCache: options.enableLogCache,
+    ntTemp: options.enableNtTemp,
     napCatData: options.enableNapCatData,
     napCatTemp: options.enableNapCatTemp,
   };
@@ -308,23 +476,53 @@ function executeClean (dataPath: string, uin: string, options: CleanOptions): Cl
 }
 
 // 获取 dataPath 下所有 QQ 账号目录
-function getAllAccounts (dataPath: string): string[] {
+function getAllAccounts(dataPath: string): string[] {
   if (!fs.existsSync(dataPath)) {
     return [];
   }
 
-  try {
-    const entries = fs.readdirSync(dataPath, { withFileTypes: true });
-    return entries
-      .filter(e => e.isDirectory() && /^\d{5,11}$/.test(e.name))
-      .map(e => e.name);
-  } catch {
-    return [];
+  if (isWindows) {
+    // Windows: 直接查找 QQ号 目录
+    try {
+      const entries = fs.readdirSync(dataPath, { withFileTypes: true });
+      return entries
+        .filter(e => e.isDirectory() && /^\d{5,11}$/.test(e.name))
+        .map(e => e.name);
+    } catch {
+      return [];
+    }
+  } else {
+    // Linux: 查找 nt_qq_{hash} 目录，返回已知的 uin
+    // 由于 Linux 无法从目录名反推 uin，只能返回当前已知的账号
+    const accounts: string[] = [];
+
+    // 从映射中获取已知账号
+    uinToHashDirMap.forEach((_, uin) => {
+      accounts.push(uin);
+    });
+
+    // 如果没有已知账号，尝试扫描并返回当前账号
+    if (accounts.length === 0 && currentUid) {
+      const hash = computeNtHash(currentUid);
+      const qqConfigPath = path.join(dataPath, '.config', 'QQ');
+      const hashDir = path.join(qqConfigPath, `nt_qq_${hash}`);
+      if (fs.existsSync(hashDir)) {
+        // 使用缓存中的 uin
+        uinToUidMap.forEach((uid, uin) => {
+          if (uid === currentUid) {
+            accounts.push(uin);
+            uinToHashDirMap.set(uin, hashDir);
+          }
+        });
+      }
+    }
+
+    return accounts;
   }
 }
 
 // 保存配置
-function saveConfig (configPath: string): void {
+function saveConfig(configPath: string): void {
   try {
     const configDir = path.dirname(configPath);
     if (!fs.existsSync(configDir)) {
@@ -337,7 +535,7 @@ function saveConfig (configPath: string): void {
 }
 
 // 清理定时器
-function clearScheduleTimer (taskId: string): void {
+function clearScheduleTimer(taskId: string): void {
   const timer = scheduleTimers.get(taskId);
   if (timer) {
     clearInterval(timer);
@@ -346,7 +544,7 @@ function clearScheduleTimer (taskId: string): void {
 }
 
 // 设置定时任务
-function setupScheduleTask (task: ScheduleTask, configPath: string): void {
+function setupScheduleTask(task: ScheduleTask, configPath: string): void {
   clearScheduleTimer(task.id);
 
   if (!task.enabled) {
@@ -412,7 +610,7 @@ function setupScheduleTask (task: ScheduleTask, configPath: string): void {
 }
 
 // 执行定时任务
-function runScheduleTask (task: ScheduleTask, configPath: string): void {
+function runScheduleTask(task: ScheduleTask, configPath: string): void {
   logger?.info(`开始执行定时任务: ${task.name}`);
 
   let accounts = task.accounts;
@@ -448,14 +646,14 @@ function runScheduleTask (task: ScheduleTask, configPath: string): void {
 }
 
 // 初始化所有定时任务
-function initAllScheduleTasks (configPath: string): void {
+function initAllScheduleTasks(configPath: string): void {
   for (const task of currentConfig.scheduleTasks) {
     setupScheduleTask(task, configPath);
   }
 }
 
 // 生成唯一ID
-function generateId (): string {
+function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
 }
 
@@ -463,6 +661,47 @@ const plugin_init: PluginModule['plugin_init'] = async (ctx) => {
   logger = ctx.logger;
   dataPathGlobal = ctx.core.dataPath;
   logger.info('NapCat 缓存清理插件已初始化');
+  logger.info(`运行平台: ${isWindows ? 'Windows' : 'Linux'}`);
+
+  // 初始化当前账号的 uid 和 uin 映射 (用于 Linux hash 计算)
+  const selfInfo = ctx.core.selfInfo;
+  if (selfInfo.uid && selfInfo.uin) {
+    currentUid = selfInfo.uid;
+    uinToUidMap.set(selfInfo.uin, selfInfo.uid);
+
+    // 计算 hash 并输出调试信息
+    const hash = computeNtHash(selfInfo.uid);
+
+    // 预计算并缓存 hash 目录 (Linux)
+    if (!isWindows) {
+      // Linux: dataPath 已经是 /app/.config/QQ，直接拼接 nt_qq_{hash}
+      const hashDir = path.join(dataPathGlobal, `nt_qq_${hash}`);
+      logger.info(`预期的 Linux 目录: ${hashDir}`);
+      logger.info(`目录是否存在: ${fs.existsSync(hashDir)}`);
+
+      // 列出 dataPath 下的所有目录
+      if (fs.existsSync(dataPathGlobal)) {
+        try {
+          const entries = fs.readdirSync(dataPathGlobal, { withFileTypes: true });
+          const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+          logger.info(`dataPath 目录下的文件夹: ${dirs.join(', ')}`);
+        } catch (e) {
+          logger.warn(`无法读取 dataPath 目录: ${e}`);
+        }
+      } else {
+        logger.warn(`dataPath 目录不存在: ${dataPathGlobal}`);
+      }
+
+      if (fs.existsSync(hashDir)) {
+        uinToHashDirMap.set(selfInfo.uin, hashDir);
+        logger.info(`Linux hash 目录已缓存`);
+      } else {
+        logger.warn(`Linux hash 目录不存在: ${hashDir}`);
+      }
+    }
+  } else {
+    logger.warn(`selfInfo 信息不完整: uid=${selfInfo.uid}, uin=${selfInfo.uin}`);
+  }
 
   // 加载配置
   try {
@@ -779,9 +1018,9 @@ const plugin_init: PluginModule['plugin_init'] = async (ctx) => {
 
 const plugin_cleanup: PluginModule['plugin_cleanup'] = async () => {
   // 清理所有定时器
-  for (const [id] of scheduleTimers) {
+  Array.from(scheduleTimers.keys()).forEach(id => {
     clearScheduleTimer(id);
-  }
+  });
   logger?.info('缓存清理插件已卸载');
 };
 

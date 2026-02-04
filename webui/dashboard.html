@@ -534,9 +534,9 @@
       schedules: []
     };
 
-    function $ (id) { return document.getElementById(id); }
+    function $(id) { return document.getElementById(id); }
 
-    function showModal () {
+    function showModal() {
       document.body.style.overflow = 'hidden';
       $("modalOverlay").style.display = "block";
       $("taskNameInput").value = "自动清理任务";
@@ -550,18 +550,18 @@
       $("taskNameInput").focus();
     }
 
-    function closeModal () {
+    function closeModal() {
       document.body.style.overflow = '';
       $("modalOverlay").style.display = "none";
     }
 
-    function toggleFreqOptions () {
+    function toggleFreqOptions() {
       const val = $("taskFrequencySelect").value;
       $("freqOptionWeekly").style.display = val === 'weekly' ? 'block' : 'none';
       $("freqOptionInterval").style.display = val === 'interval' ? 'flex' : 'none';
     }
 
-    async function confirmAddSchedule () {
+    async function confirmAddSchedule() {
       const name = $("taskNameInput").value.trim();
       const h = parseInt($("taskHourInput").value) || 0;
       const m = parseInt($("taskMinuteInput").value) || 0;
@@ -612,7 +612,7 @@
       showMsg('定时任务已添加', 'success');
     }
 
-    async function request (url, options = {}) {
+    async function request(url, options = {}) {
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -622,14 +622,14 @@
       return await res.json();
     }
 
-    function showMsg (text, type) {
+    function showMsg(text, type) {
       const el = $("msg");
       el.textContent = text;
       el.className = `msg msg-${type}`;
       setTimeout(() => { el.className = 'msg'; }, 4000);
     }
 
-    async function fetchAccounts () {
+    async function fetchAccounts() {
       const data = await request(`${apiBase}/accounts`);
       if (data.code !== 0) return;
       state.allAccounts = data.data.accounts;
@@ -640,7 +640,7 @@
       fetchStats();
     }
 
-    function renderAccounts () {
+    function renderAccounts() {
       let html = '';
       state.allAccounts.forEach(acc => {
         const isSelected = state.selectedAccounts.includes(acc.uin);
@@ -665,7 +665,7 @@
       fetchStats();
     };
 
-    async function fetchStats () {
+    async function fetchStats() {
       if (state.selectedAccounts.length === 0) {
         $("stats").innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 20px;">请选择至少一个账号进行管理</div>';
         return;
@@ -696,8 +696,11 @@
           video: '视频文件',
           videoThumb: '视频封面',
           ptt: '语音消息',
+          pic: '图片缓存',
           file: '普通文件',
           log: '程序日志',
+          logCache: '日志缓存',
+          ntTemp: 'QQ临时文件',
           napCatData: 'NapCat 数据',
           napCatTemp: 'NapCat 临时文件'
         };
@@ -733,20 +736,23 @@
       { id: 'optVideo', label: '清理视频', key: 'enableVideo' },
       { id: 'optVideoThumb', label: '清理视频封面', key: 'enableVideoThumb' },
       { id: 'optPtt', label: '清理语音', key: 'enablePtt' },
+      { id: 'optPic', label: '清理图片缓存', key: 'enablePic' },
       { id: 'optFile', label: '清理收发文件', key: 'enableFile' },
       { id: 'optLog', label: '清理运行日志', key: 'enableLog' },
+      { id: 'optLogCache', label: '清理日志缓存', key: 'enableLogCache' },
+      { id: 'optNtTemp', label: '清理QQ临时文件', key: 'enableNtTemp' },
       { id: 'optNapCatData', label: '清理 NapCat 核心数据', key: 'enableNapCatData' },
       { id: 'optNapCatTemp', label: '清理 NapCat 临时文件', key: 'enableNapCatTemp' }
     ];
 
-    async function fetchConfig () {
+    async function fetchConfig() {
       const data = await request(`${apiBase}/config`);
       if (data.code !== 0) return;
       state.defaultOptions = data.data.defaultOptions;
       renderOptions();
     }
 
-    function renderOptions () {
+    function renderOptions() {
       const opts = state.defaultOptions;
       let html = '';
       configItems.forEach(item => {
@@ -761,7 +767,7 @@
       $("optRetainDays").value = opts.retainDays;
     }
 
-    function getModalOptions () {
+    function getModalOptions() {
       const opts = {};
       configItems.forEach(item => {
         const el = document.getElementById(`modal_${item.id}`);
@@ -770,7 +776,7 @@
       return opts;
     }
 
-    function renderModalOptions (defaults = {}) {
+    function renderModalOptions(defaults = {}) {
       let html = '';
       configItems.forEach(item => {
         const isChecked = defaults[item.key] !== undefined ? defaults[item.key] : (state.defaultOptions[item.key] || false);
@@ -785,7 +791,7 @@
       $("modalOptions").innerHTML = html;
     }
 
-    function renderModalAccounts () {
+    function renderModalAccounts() {
       let html = '';
       if (state.allAccounts.length === 0) {
         html = '<div style="color:var(--text-secondary); font-size:13px; text-align:center; padding:10px;">暂无账号信息</div>';
@@ -871,14 +877,14 @@
 
     $("refreshBtn").onclick = () => { fetchAccounts(); fetchConfig(); };
 
-    async function fetchSchedules () {
+    async function fetchSchedules() {
       const data = await request(`${apiBase}/schedules`);
       if (data.code !== 0) return;
       state.schedules = data.data;
       renderSchedules();
     }
 
-    function renderSchedules () {
+    function renderSchedules() {
       let html = '';
       if (state.schedules.length === 0) {
         html = '<div style="color: var(--text-secondary); font-size: 14px;">暂未设置定时清理任务</div>';
@@ -938,7 +944,7 @@
       fetchSchedules();
     };
 
-    function showConfirm (message) {
+    function showConfirm(message) {
       return new Promise((resolve) => {
         const overlay = $("confirmModalOverlay");
         const msgEl = $("confirmMessage");
