@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTheme } from './hooks/useTheme';
 import { request } from './utils/api';
 import { Account, CleanerConfig, ScheduleTask } from './types';
 import { Card } from './components/ui/Card';
@@ -15,6 +16,7 @@ import { Eraser, RefreshCw, Settings, Info, ArrowRight, ShieldCheck, Clock, Hard
 import { TabId } from './components/Sidebar';
 
 function App() {
+    useTheme();
     // Data States
     const [loading, setLoading] = useState(true);
     const [accounts, setAccounts] = useState<Account[]>([]);
@@ -38,14 +40,14 @@ function App() {
     const [activeTab, setActiveTab] = useState<TabId>('dashboard');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [cleaning, setCleaning] = useState(false);
-    
+
     // Toast & Confirm States
     const [toasts, setToasts] = useState<ToastMessage[]>([]);
     const [confirmModal, setConfirmModal] = useState({
         isOpen: false,
         title: '',
         description: '',
-        onConfirm: () => {},
+        onConfirm: () => { },
         type: 'danger' as 'danger' | 'info'
     });
 
@@ -117,11 +119,11 @@ function App() {
                         newAccounts[idx] = { ...newAccounts[idx], stats: res.data.formattedStats };
                     }
                 }
-            } catch (e) { 
+            } catch (e) {
                 console.error(e);
             }
         }
-        
+
         setAccounts(newAccounts);
     };
 
@@ -164,7 +166,7 @@ function App() {
 
                     if (res.code === 0) {
                         showToast(`清理完成，释放空间: ${res.data.totalSize}`, 'success');
-                        updateStats(); 
+                        updateStats();
                     } else {
                         showToast(`清理失败: ${res.message}`, 'error');
                     }
@@ -257,10 +259,10 @@ function App() {
 
     return (
         <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-            
+
             <div className="flex flex-col h-full min-h-0">
-                <Header 
-                    title={pageTitles[activeTab].title} 
+                <Header
+                    title={pageTitles[activeTab].title}
                     description={pageTitles[activeTab].desc}
                     actions={
                         <button
@@ -273,208 +275,207 @@ function App() {
                     }
                 />
 
-                <div className={`px-4 md:px-8 pb-8 page-enter flex-1 min-h-0 ${
-                    activeTab === 'dashboard' ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden flex flex-col'
-                }`}>
+                <div className={`px-4 md:px-8 pb-8 page-enter flex-1 min-h-0 ${activeTab === 'dashboard' ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden flex flex-col'
+                    }`}>
                     {activeTab === 'dashboard' && (
-                    <div className="max-w-5xl mx-auto space-y-6 w-full py-2">
-                        {/* Welcome Card */}
-                        <div className="relative overflow-hidden bg-white dark:bg-[#1e1e20] p-8 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm group">
-                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
-                                <ShieldCheck className="w-32 h-32 text-primary rotate-12" />
-                            </div>
-                            <div className="relative z-10">
-                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-3">
-                                    欢迎使用 Cleaner
-                                    <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">v1.0.0</span>
-                                </h2>
-                                <p className="text-gray-500 dark:text-gray-400 max-w-2xl leading-relaxed">
-                                    这是一个专为 NapCat 设计的轻量级清理插件。您可以手动清理指定账号的缓存文件，或设置定时任务自动执行清理，释放您的磁盘空间。
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Status Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Account Stats */}
-                            <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('files')}>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">已检测账号</p>
-                                        <h3 className="text-4xl font-bold text-gray-900 dark:text-white mt-3 font-mono">{accounts.length}</h3>
-                                    </div>
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-500 group-hover:scale-110 transition-transform">
-                                        <ShieldCheck className="w-6 h-6" />
-                                    </div>
+                        <div className="max-w-5xl mx-auto space-y-6 w-full py-2">
+                            {/* Welcome Card */}
+                            <div className="relative overflow-hidden bg-white dark:bg-[#1e1e20] p-8 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm group">
+                                <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                                    <ShieldCheck className="w-32 h-32 text-primary rotate-12" />
                                 </div>
-                                <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
-                                    查看账号详情 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
-                                </div>
-                            </div>
-
-                            {/* Task Stats */}
-                            <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('tasks')}>
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">定时任务</p>
-                                        <div className="flex items-baseline gap-2 mt-3">
-                                            <h3 className="text-4xl font-bold text-gray-900 dark:text-white font-mono">
-                                                {schedules.filter(s => s.enabled).length}
-                                            </h3>
-                                            <span className="text-sm font-medium text-gray-400">/ {schedules.length} 总计</span>
-                                        </div>
-                                    </div>
-                                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-500 group-hover:scale-110 transition-transform">
-                                        <Clock className="w-6 h-6" />
-                                    </div>
-                                </div>
-                                <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
-                                    管理任务 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
-                                </div>
-                            </div>
-
-                            {/* Quick Action */}
-                            <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/50 dark:to-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm">
-                                <div>
-                                    <h3 className="font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                                        <HardDrive className="w-5 h-5 text-gray-400" />
-                                        快速清理
-                                    </h3>
-                                    <p className="text-sm text-gray-500 leading-relaxed">
-                                        立即前往文件管理页面，选择账号并释放空间。
+                                <div className="relative z-10">
+                                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-3">
+                                        欢迎使用 Cleaner
+                                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">v1.0.0</span>
+                                    </h2>
+                                    <p className="text-gray-500 dark:text-gray-400 max-w-2xl leading-relaxed">
+                                        这是一个专为 NapCat 设计的轻量级清理插件。您可以手动清理指定账号的缓存文件，或设置定时任务自动执行清理，释放您的磁盘空间。
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => setActiveTab('files')}
-                                    className="w-full py-2.5 bg-primary hover:bg-[#e05a80] text-white rounded-lg font-bold transition-all shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] flex items-center justify-center gap-2"
-                                >
-                                    前往清理
-                                    <ArrowRight className="w-4 h-4" />
-                                </button>
+                            </div>
+
+                            {/* Status Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                {/* Account Stats */}
+                                <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('files')}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">已检测账号</p>
+                                            <h3 className="text-4xl font-bold text-gray-900 dark:text-white mt-3 font-mono">{accounts.length}</h3>
+                                        </div>
+                                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-500 group-hover:scale-110 transition-transform">
+                                            <ShieldCheck className="w-6 h-6" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
+                                        查看账号详情 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
+                                    </div>
+                                </div>
+
+                                {/* Task Stats */}
+                                <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('tasks')}>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">定时任务</p>
+                                            <div className="flex items-baseline gap-2 mt-3">
+                                                <h3 className="text-4xl font-bold text-gray-900 dark:text-white font-mono">
+                                                    {schedules.filter(s => s.enabled).length}
+                                                </h3>
+                                                <span className="text-sm font-medium text-gray-400">/ {schedules.length} 总计</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-500 group-hover:scale-110 transition-transform">
+                                            <Clock className="w-6 h-6" />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
+                                        管理任务 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
+                                    </div>
+                                </div>
+
+                                {/* Quick Action */}
+                                <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/50 dark:to-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm">
+                                    <div>
+                                        <h3 className="font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                                            <HardDrive className="w-5 h-5 text-gray-400" />
+                                            快速清理
+                                        </h3>
+                                        <p className="text-sm text-gray-500 leading-relaxed">
+                                            立即前往文件管理页面，选择账号并释放空间。
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => setActiveTab('files')}
+                                        className="w-full py-2.5 bg-primary hover:bg-[#e05a80] text-white rounded-lg font-bold transition-all shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] flex items-center justify-center gap-2"
+                                    >
+                                        前往清理
+                                        <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {activeTab === 'files' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
-                        {/* Left Column - Stats (8/12 = 2/3) */}
-                        <div className="lg:col-span-8 lg:h-full lg:min-h-0">
-                            <StatsTable
-                                accounts={accounts}
-                                selectedAccounts={selectedAccounts}
-                                retainDays={config.retainDays}
-                                className="h-full"
-                            />
-                        </div>
-
-                        {/* Right Column - Accounts & Actions (4/12 = 1/3) */}
-                        <div className="lg:col-span-4 flex flex-col gap-4 lg:h-full lg:min-h-0">
-                            {/* Account List - Takes remaining space */}
-                            <div className="flex-1 min-h-0">
-                                <AccountList
+                    {activeTab === 'files' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
+                            {/* Left Column - Stats (8/12 = 2/3) */}
+                            <div className="lg:col-span-8 lg:h-full lg:min-h-0">
+                                <StatsTable
                                     accounts={accounts}
                                     selectedAccounts={selectedAccounts}
-                                    onToggleAccount={handleToggleAccount}
+                                    retainDays={config.retainDays}
+                                    className="h-full"
                                 />
                             </div>
 
-                            {/* Cleanup Actions - Fixed height/content */}
-                            <div className="flex-shrink-0">
-                                <Card 
-                                    title="清理操作" 
-                                    subtitle="执行清理与配置"
-                                >
-                                    <div className="space-y-6">
-                                        {/* Action Button */}
-                                        <div>
-                                            <p className="text-sm text-gray-500 mb-4">
-                                                将清理 <span className="text-primary font-bold">{selectedAccounts.length}</span> 个选中账号的文件。
-                                                <br />此操作不可撤销。
-                                            </p>
-                                            <button
-                                                onClick={handleClean}
-                                                disabled={cleaning || selectedAccounts.length === 0}
-                                                className={`
+                            {/* Right Column - Accounts & Actions (4/12 = 1/3) */}
+                            <div className="lg:col-span-4 flex flex-col gap-4 lg:h-full lg:min-h-0">
+                                {/* Account List - Takes remaining space */}
+                                <div className="flex-1 min-h-0">
+                                    <AccountList
+                                        accounts={accounts}
+                                        selectedAccounts={selectedAccounts}
+                                        onToggleAccount={handleToggleAccount}
+                                    />
+                                </div>
+
+                                {/* Cleanup Actions - Fixed height/content */}
+                                <div className="flex-shrink-0">
+                                    <Card
+                                        title="清理操作"
+                                        subtitle="执行清理与配置"
+                                    >
+                                        <div className="space-y-6">
+                                            {/* Action Button */}
+                                            <div>
+                                                <p className="text-sm text-gray-500 mb-4">
+                                                    将清理 <span className="text-primary font-bold">{selectedAccounts.length}</span> 个选中账号的文件。
+                                                    <br />此操作不可撤销。
+                                                </p>
+                                                <button
+                                                    onClick={handleClean}
+                                                    disabled={cleaning || selectedAccounts.length === 0}
+                                                    className={`
                                                     w-full py-3 rounded-lg font-bold text-white shadow-lg shadow-pink-500/20 transition-all transform active:scale-[0.98]
                                                     flex items-center justify-center gap-2
                                                     ${cleaning || selectedAccounts.length === 0
-                                                        ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed shadow-none'
-                                                        : 'bg-primary hover:bg-[#e05a80]'
-                                                    }
+                                                            ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed shadow-none'
+                                                            : 'bg-primary hover:bg-[#e05a80]'
+                                                        }
                                                 `}
-                                            >
-                                                {cleaning ? (
-                                                    <>
-                                                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                                        <span>清理中...</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Eraser className="w-4 h-4" />
-                                                        <span>立即清理</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-
-                                        {/* Config Summary & Link */}
-                                        <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-500 flex items-center gap-1">
-                                                    保留天数
-                                                    <Info className="w-3 h-3 text-gray-400" />
-                                                </span>
-                                                <span className="font-mono font-bold text-gray-900 dark:text-gray-100">{config.retainDays} 天</span>
+                                                >
+                                                    {cleaning ? (
+                                                        <>
+                                                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                                            <span>清理中...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Eraser className="w-4 h-4" />
+                                                            <span>立即清理</span>
+                                                        </>
+                                                    )}
+                                                </button>
                                             </div>
-                                            
-                                            <button
-                                                onClick={() => setActiveTab('settings')}
-                                                className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group mt-2"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <Settings className="w-4 h-4 text-gray-500 group-hover:text-primary transition-colors" />
-                                                    <div className="text-left">
-                                                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">修改配置</div>
-                                                    </div>
+
+                                            {/* Config Summary & Link */}
+                                            <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-500 flex items-center gap-1">
+                                                        保留天数
+                                                        <Info className="w-3 h-3 text-gray-400" />
+                                                    </span>
+                                                    <span className="font-mono font-bold text-gray-900 dark:text-gray-100">{config.retainDays} 天</span>
                                                 </div>
-                                                <div className="text-gray-400 group-hover:text-primary transition-colors text-lg">›</div>
-                                            </button>
+
+                                                <button
+                                                    onClick={() => setActiveTab('settings')}
+                                                    className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group mt-2"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <Settings className="w-4 h-4 text-gray-500 group-hover:text-primary transition-colors" />
+                                                        <div className="text-left">
+                                                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">修改配置</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-gray-400 group-hover:text-primary transition-colors text-lg">›</div>
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                </Card>
+                                    </Card>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {activeTab === 'tasks' && (
-                    <div className="h-full min-h-0">
-                        <ScheduleList
-                            schedules={schedules}
-                            onDelete={handleDeleteTask}
-                            onToggle={handleToggleTask}
-                            onRun={handleRunTask}
-                            onCreate={() => setIsCreateModalOpen(true)}
-                        />
-                    </div>
-                )}
+                    {activeTab === 'tasks' && (
+                        <div className="h-full min-h-0">
+                            <ScheduleList
+                                schedules={schedules}
+                                onDelete={handleDeleteTask}
+                                onToggle={handleToggleTask}
+                                onRun={handleRunTask}
+                                onCreate={() => setIsCreateModalOpen(true)}
+                            />
+                        </div>
+                    )}
 
-                {activeTab === 'settings' && (
-                    <div className="h-full min-h-0">
-                        <ConfigPanel
-                            config={config}
-                            onChange={setConfig}
-                            onSave={handleSaveDefaultConfig}
-                        />
-                    </div>
-                )}
+                    {activeTab === 'settings' && (
+                        <div className="h-full min-h-0">
+                            <ConfigPanel
+                                config={config}
+                                onChange={setConfig}
+                                onSave={handleSaveDefaultConfig}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Overlays */}
             <ToastContainer toasts={toasts} onRemove={removeToast} />
-            
+
             <ConfirmModal
                 isOpen={confirmModal.isOpen}
                 onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
