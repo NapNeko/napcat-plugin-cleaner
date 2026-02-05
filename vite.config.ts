@@ -62,7 +62,7 @@ const external = [];
 // }
 
 // 递归复制目录
-function copyDirRecursive (src: string, dest: string) {
+function copyDirRecursive(src: string, dest: string) {
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
   }
@@ -94,7 +94,7 @@ export default defineConfig({
     target: 'esnext',
     minify: false,
     lib: {
-      entry: 'index.ts',
+      entry: 'src/index.ts',
       formats: ['es'],
       fileName: () => 'index.mjs',
     },
