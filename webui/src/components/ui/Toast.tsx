@@ -1,5 +1,6 @@
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 import { useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export type ToastType = 'success' | 'error' | 'info';
 
@@ -17,9 +18,11 @@ interface ToastContainerProps {
 export function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
     return (
         <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
-            {toasts.map((toast) => (
-                <Toast key={toast.id} message={toast} onRemove={onRemove} />
-            ))}
+            <AnimatePresence mode="popLayout">
+                {toasts.map((toast) => (
+                    <Toast key={toast.id} message={toast} onRemove={onRemove} />
+                ))}
+            </AnimatePresence>
         </div>
     );
 }
@@ -45,19 +48,23 @@ function Toast({ message, onRemove }: { message: ToastMessage; onRemove: (id: st
     };
 
     return (
-        <div className={`
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+            className={`
             pointer-events-auto flex items-center gap-3 px-4 py-3 min-w-[300px] max-w-md
             rounded-lg shadow-lg border ${styles[message.type]}
-            animate-in slide-in-from-right-full duration-300
         `}>
             {icons[message.type]}
             <p className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-200">{message.text}</p>
-            <button 
+            <button
                 onClick={() => onRemove(message.id)}
                 className="text-gray-400 hover:text-gray-500 transition-colors"
             >
                 <X className="w-4 h-4" />
             </button>
-        </div>
+        </motion.div>
     );
 }
