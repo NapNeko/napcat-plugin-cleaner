@@ -81,6 +81,54 @@ function copyDirRecursive(src: string, dest: string) {
   }
 }
 
+// 构建后复制 webui 到 dist 目录
+function copyWebuiPlugin() {
+  return {
+    name: 'copy-webui',
+    writeBundle() {
+      try {
+        const webuiSource = resolve(__dirname, 'webui/dashboard.html');
+        const webuiTargetDir = resolve(__dirname, 'dist/webui');
+        const webuiTarget = resolve(webuiTargetDir, 'dashboard.html');
+        const packageJsonSource = resolve(__dirname, 'package.json');
+        const packageJsonTarget = resolve(__dirname, 'dist/package.json');
+
+        // 确保目标目录存在
+        if (!fs.existsSync(webuiTargetDir)) {
+          fs.mkdirSync(webuiTargetDir, { recursive: true });
+        }
+
+        // 复制 dashboard.html
+        if (fs.existsSync(webuiSource)) {
+          fs.copyFileSync(webuiSource, webuiTarget);
+          console.log(`[copy-webui] Copied dashboard.html to ${webuiTarget}`);
+        } else {
+          console.warn(`[copy-webui] Warning: ${webuiSource} not found. Run 'pnpm --filter webui build' first.`);
+        }
+
+        // 生成精简的 package.json（只保留运行时必要字段）
+        if (fs.existsSync(packageJsonSource)) {
+          const pkg = JSON.parse(fs.readFileSync(packageJsonSource, 'utf-8'));
+          const distPkg = {
+            name: pkg.name,
+            plugin: pkg.plugin,
+            version: pkg.version,
+            type: pkg.type,
+            main: pkg.main,
+            description: pkg.description,
+            author: pkg.author,
+            dependencies: pkg.dependencies,
+          };
+          fs.writeFileSync(packageJsonTarget, JSON.stringify(distPkg, null, 2));
+          console.log(`[copy-webui] Generated package.json to ${packageJsonTarget}`);
+        }
+      } catch (error) {
+        console.error('[copy-webui] Failed to copy webui:', error);
+      }
+    },
+  };
+}
+
 export default defineConfig({
   resolve: {
     conditions: ['node', 'default'],
@@ -102,5 +150,5 @@ export default defineConfig({
       external: [...nodeModules, ...external],
     },
   },
-  plugins: [nodeResolve(), /* copyToShellPlugin() */],
+  plugins: [nodeResolve(), copyWebuiPlugin()],
 });
