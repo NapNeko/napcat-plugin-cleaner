@@ -86,6 +86,16 @@ const plugin_init: PluginModule['plugin_init'] = async (ctx) => {
     // 注册静态资源
     ctx.router.static('/static', 'webui');
 
+    // 插件信息脚本（用于前端获取插件名）
+    ctx.router.get('/static/plugin-info.js', (_req: any, res: any) => {
+        try {
+            res.type('application/javascript');
+            res.send(`window.__PLUGIN_NAME__ = ${JSON.stringify(ctx.pluginName)};`);
+        } catch (e) {
+            res.status(500).send('// failed to generate plugin-info');
+        }
+    });
+
     // 注册 API 路由
     registerApiRoutes(ctx.router, ctx.core.selfInfo.uin);
 

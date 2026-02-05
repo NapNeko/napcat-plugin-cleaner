@@ -23,14 +23,21 @@ export function registerApiRoutes(router: any, selfUin: string): void {
             pluginState.log('info', `[/accounts] getAllAccounts 返回: ${accounts.length} 个账号`);
 
             const accountStats = accounts.map(uin => {
-                const stats = scanCache(dataPath, uin);
+                const stats = scanCache(dataPath, uin, 0);
                 return {
                     uin,
                     isCurrent: uin === selfUin,
                     stats: {
                         totalFiles: stats.totalFiles,
                         totalSize: formatSize(stats.totalSize),
-                        totalSizeBytes: stats.totalSize,
+                        estimatedCleanSize: '0 B',
+                        categories: Object.fromEntries(
+                            Object.entries(stats.categories).map(([k, v]) => [k, {
+                                files: v.files,
+                                size: formatSize(v.size),
+                                estimatedCleanSize: '0 B',
+                            }])
+                        ),
                     },
                 };
             });

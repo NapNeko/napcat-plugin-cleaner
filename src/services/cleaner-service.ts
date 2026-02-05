@@ -16,7 +16,7 @@ export function getNtDataPath(dataPath: string, uin: string): string | null {
         }
         return null;
     } else {
-        // Linux: dataPath 已经是 /app/.config/QQ，直接拼接 nt_qq_{hash}
+        // Linux: dataPath 已经是 QQ 下的路径,如 /app/.config/QQ，直接拼接 nt_qq_{hash}
         const cachedHashDir = pluginState.uinToHashDirMap.get(uin);
         if (cachedHashDir) {
             const ntDataPath = path.join(cachedHashDir, 'nt_data');
@@ -86,7 +86,7 @@ function getNapCatPath(dataPath: string): string {
 }
 
 /**
- * 获取所有需要清理的目录
+ * 获取所有需要清理的目录(太多乱七八糟的目录了,写一起吧)
  */
 export function getCleanablePaths(dataPath: string, uin: string): CleanablePaths {
     const ntDataPath = getNtDataPath(dataPath, uin);
