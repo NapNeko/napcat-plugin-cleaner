@@ -477,12 +477,11 @@ function executeClean(dataPath: string, uin: string, options: CleanOptions): Cle
 
 // 获取 dataPath 下所有 QQ 账号目录
 function getAllAccounts(dataPath: string): string[] {
-  if (!fs.existsSync(dataPath)) {
-    return [];
-  }
-
   if (isWindows) {
     // Windows: 直接查找 QQ号 目录
+    if (!fs.existsSync(dataPath)) {
+      return [];
+    }
     try {
       const entries = fs.readdirSync(dataPath, { withFileTypes: true });
       return entries
@@ -492,30 +491,25 @@ function getAllAccounts(dataPath: string): string[] {
       return [];
     }
   } else {
-    // Linux: 查找 nt_qq_{hash} 目录，返回已知的 uin
-    // 由于 Linux 无法从目录名反推 uin，只能返回当前已知的账号
+    // Linux: 优先使用 uinToUidMap（通过 getLoginList 获取的完整列表）
     const accounts: string[] = [];
 
-    // 从映射中获取已知账号
-    uinToHashDirMap.forEach((_, uin) => {
-      accounts.push(uin);
-    });
-
-    // 如果没有已知账号，尝试扫描并返回当前账号
-    if (accounts.length === 0 && currentUid) {
-      const hash = computeNtHash(currentUid);
-      const qqConfigPath = path.join(dataPath, '.config', 'QQ');
-      const hashDir = path.join(qqConfigPath, `nt_qq_${hash}`);
-      if (fs.existsSync(hashDir)) {
-        // 使用缓存中的 uin
-        uinToUidMap.forEach((uid, uin) => {
-          if (uid === currentUid) {
-            accounts.push(uin);
-            uinToHashDirMap.set(uin, hashDir);
-          }
-        });
+    // 从 uinToUidMap 获取所有已知账号（包括通过 getLoginList 获取的）
+    uinToUidMap.forEach((uid, uin) => {
+      // 检查该账号的 hash 目录是否存在
+      if (!uinToHashDirMap.has(uin)) {
+        const hash = computeNtHash(uid);
+        const hashDir = path.join(dataPath, `nt_qq_${hash}`);
+        if (fs.existsSync(hashDir)) {
+          uinToHashDirMap.set(uin, hashDir);
+        }
       }
-    }
+
+      // 只有 hash 目录存在的账号才加入列表
+      if (uinToHashDirMap.has(uin)) {
+        accounts.push(uin);
+      }
+    });
 
     return accounts;
   }
@@ -662,45 +656,67 @@ const plugin_init: PluginModule['plugin_init'] = async (ctx) => {
   dataPathGlobal = ctx.core.dataPath;
   logger.info('NapCat 缓存清理插件已初始化');
   logger.info(`运行平台: ${isWindows ? 'Windows' : 'Linux'}`);
+  logger.info(`dataPath: ${dataPathGlobal}`);
 
-  // 初始化当前账号的 uid 和 uin 映射 (用于 Linux hash 计算)
-  const selfInfo = ctx.core.selfInfo;
-  if (selfInfo.uid && selfInfo.uin) {
-    currentUid = selfInfo.uid;
-    uinToUidMap.set(selfInfo.uin, selfInfo.uid);
+  // 使用 getLoginList() 获取所有登录过的账号的 uin/uid 映射
+  try {
+    const loginService = ctx.core.context.wrapper.NodeIKernelLoginService.get();
+    const loginResult = await loginService.getLoginList();
 
-    // 计算 hash 并输出调试信息
-    const hash = computeNtHash(selfInfo.uid);
+    logger.info(`getLoginList 返回: result=${loginResult.result}, count=${loginResult.LocalLoginInfoList?.length || 0}`);
 
-    // 预计算并缓存 hash 目录 (Linux)
-    if (!isWindows) {
-      // Linux: dataPath 已经是 /app/.config/QQ，直接拼接 nt_qq_{hash}
-      const hashDir = path.join(dataPathGlobal, `nt_qq_${hash}`);
-      logger.info(`预期的 Linux 目录: ${hashDir}`);
-      logger.info(`目录是否存在: ${fs.existsSync(hashDir)}`);
+    if (loginResult.result === 0 && loginResult.LocalLoginInfoList) {
+      logger.info(`获取到 ${loginResult.LocalLoginInfoList.length} 个登录账号`);
 
-      // 列出 dataPath 下的所有目录
-      if (fs.existsSync(dataPathGlobal)) {
-        try {
-          const entries = fs.readdirSync(dataPathGlobal, { withFileTypes: true });
-          const dirs = entries.filter(e => e.isDirectory()).map(e => e.name);
-          logger.info(`dataPath 目录下的文件夹: ${dirs.join(', ')}`);
-        } catch (e) {
-          logger.warn(`无法读取 dataPath 目录: ${e}`);
+      for (const item of loginResult.LocalLoginInfoList) {
+        if (item.uin && item.uid) {
+          uinToUidMap.set(item.uin, item.uid);
+
+          // 如果是当前账号，设置 currentUid
+          if (item.uin === ctx.core.selfInfo.uin) {
+            currentUid = item.uid;
+          }
+
+          // 预计算并缓存 hash 目录 (Linux)
+          if (!isWindows) {
+            const hash = computeNtHash(item.uid);
+            const hashDir = path.join(dataPathGlobal, `nt_qq_${hash}`);
+            if (fs.existsSync(hashDir)) {
+              uinToHashDirMap.set(item.uin, hashDir);
+              logger.info(`账号 ${item.uin} 的 hash 目录已缓存: ${hashDir}`);
+            } else {
+              logger.warn(`账号 ${item.uin} 的 hash 目录不存在: ${hashDir}`);
+            }
+          }
+
+          logger.info(`已加载账号映射: uin=${item.uin}, uid=${item.uid}, nickName=${item.nickName || 'N/A'}`);
         }
-      } else {
-        logger.warn(`dataPath 目录不存在: ${dataPathGlobal}`);
       }
-
-      if (fs.existsSync(hashDir)) {
-        uinToHashDirMap.set(selfInfo.uin, hashDir);
-        logger.info(`Linux hash 目录已缓存`);
-      } else {
-        logger.warn(`Linux hash 目录不存在: ${hashDir}`);
-      }
+    } else {
+      logger.warn(`getLoginList 返回结果异常: result=${loginResult.result}`);
     }
-  } else {
-    logger.warn(`selfInfo 信息不完整: uid=${selfInfo.uid}, uin=${selfInfo.uin}`);
+  } catch (e) {
+    logger.warn(`通过 getLoginList 获取账号列表失败: ${e}`);
+
+    // 回退到原有的 selfInfo 方式
+    const selfInfo = ctx.core.selfInfo;
+    if (selfInfo.uid && selfInfo.uin) {
+      currentUid = selfInfo.uid;
+      uinToUidMap.set(selfInfo.uin, selfInfo.uid);
+      logger.info(`回退使用 selfInfo: uin=${selfInfo.uin}, uid=${selfInfo.uid}`);
+
+      // 预计算并缓存 hash 目录 (Linux)
+      if (!isWindows) {
+        const hash = computeNtHash(selfInfo.uid);
+        const hashDir = path.join(dataPathGlobal, `nt_qq_${hash}`);
+        if (fs.existsSync(hashDir)) {
+          uinToHashDirMap.set(selfInfo.uin, hashDir);
+          logger.info(`Linux hash 目录已缓存`);
+        }
+      }
+    } else {
+      logger.warn(`selfInfo 信息不完整: uid=${selfInfo.uid}, uin=${selfInfo.uin}`);
+    }
   }
 
   // 加载配置
@@ -725,6 +741,12 @@ const plugin_init: PluginModule['plugin_init'] = async (ctx) => {
       const dataPath = ctx.core.dataPath;
       const accounts = getAllAccounts(dataPath);
       const currentUin = ctx.core.selfInfo.uin;
+
+      // 调试日志
+      logger?.info(`[/accounts] dataPath=${dataPath}, currentUin=${currentUin}`);
+      logger?.info(`[/accounts] uinToUidMap 大小: ${uinToUidMap.size}`);
+      logger?.info(`[/accounts] uinToHashDirMap 大小: ${uinToHashDirMap.size}`);
+      logger?.info(`[/accounts] getAllAccounts 返回: ${accounts.length} 个账号: ${accounts.join(', ')}`);
 
       // 获取每个账号的缓存统计
       const accountStats = accounts.map(uin => {
