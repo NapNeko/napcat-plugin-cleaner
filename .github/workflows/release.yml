@@ -152,7 +152,18 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: Release ${{ steps.version.outputs.version }}
-          body_path: CHANGELOG.md
+          body: |
+            ## 📦 下载地址
+
+            插件已发布到统一的插件索引仓库，请前往以下链接下载：
+
+            👉 **[点击下载 napcat-plugin-cleaner.zip](https://github.com/NapNeko/napcat-plugin-index/releases/download/v1.0.0/napcat-plugin-cleaner.zip)**
+
+            ---
+
+            📋 **更新详情请查看：** [CHANGELOG.md](CHANGELOG.md)
+
+            🔗 **插件索引仓库：** https://github.com/NapNeko/napcat-plugin-index/releases/tag/v1.0.0
           draft: false
           files: |
             napcat-plugin-cleaner.zip
