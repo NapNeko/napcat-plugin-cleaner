@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ScheduleTask, Account, CleanerConfig } from '../types';
-import { X } from 'lucide-react';
+import { X, Calendar, Clock, Save } from 'lucide-react';
 
 interface CreateTaskModalProps {
     isOpen: boolean;
@@ -68,65 +68,76 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
     ];
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
-            <div className="bg-bg-card rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
-                <div className="flex items-center justify-between p-6 border-b border-border-color sticky top-0 bg-bg-card z-10">
-                    <h2 className="text-xl font-bold text-text-main">新建定时任务</h2>
-                    <button onClick={onClose} className="text-text-secondary hover:text-text-main p-1 rounded-full hover:bg-item-bg">
-                        <X className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-all">
+            <div className="bg-white dark:bg-[#1e1e20] rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col border border-gray-100 dark:border-gray-800 animate-in fade-in zoom-in-95 duration-200 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
+                <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-gray-800 sticky top-0 bg-white dark:bg-[#1e1e20] z-10">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">新建定时任务</h2>
+                    <button 
+                        onClick={onClose} 
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        <X className="w-5 h-5" />
                     </button>
                 </div>
 
                 <div className="p-6 space-y-8">
                     {/* 基本信息 */}
                     <section>
-                        <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">基本信息</h3>
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Clock className="w-4 h-4" /> 基本信息
+                        </h3>
                         <div>
-                            <label className="block text-sm text-text-secondary mb-1">任务名称</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">任务名称</label>
                             <input
                                 type="text"
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 placeholder="例如：每日自动清理"
-                                className="w-full px-3 py-2 border border-border-color rounded-lg text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                                className="input-field"
                             />
                         </div>
                     </section>
 
                     {/* 账号选择 */}
                     <section>
-                        <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">选择账号</h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {accounts.map(acc => (
-                                <div
-                                    key={acc.uin}
-                                    onClick={() => toggleAccount(acc.uin)}
-                                    className={`
-                    p-3 rounded-lg border text-sm cursor-pointer flex items-center justify-between
-                    ${selectedAccounts.includes(acc.uin)
-                                            ? 'bg-blue-50 border-primary'
-                                            : 'bg-item-bg border-transparent hover:bg-item-hover'}
-                  `}
-                                >
-                                    <span className="font-medium">{acc.uin}</span>
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center ${selectedAccounts.includes(acc.uin) ? 'bg-primary border-primary' : 'border-gray-300'}`}>
-                                        {selectedAccounts.includes(acc.uin) && <span className="text-white text-xs">✓</span>}
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">选择账号</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {accounts.map(acc => {
+                                const isSelected = selectedAccounts.includes(acc.uin);
+                                return (
+                                    <div
+                                        key={acc.uin}
+                                        onClick={() => toggleAccount(acc.uin)}
+                                        className={`
+                                            p-3 rounded-lg border text-sm cursor-pointer flex items-center justify-between transition-all
+                                            ${isSelected
+                                                ? 'bg-primary/5 border-primary text-primary font-medium'
+                                                : 'bg-gray-50 dark:bg-gray-800/50 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                                            }
+                                        `}
+                                    >
+                                        <span>{acc.uin}</span>
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isSelected ? 'bg-primary border-primary' : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'}`}>
+                                            {isSelected && <span className="text-white text-xs">✓</span>}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </section>
 
                     {/* 执行计划 */}
                     <section>
-                        <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">执行计划</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <Calendar className="w-4 h-4" /> 执行计划
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm text-text-secondary mb-1">执行频率</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">执行频率</label>
                                 <select
                                     value={frequency}
                                     onChange={e => setFrequency(e.target.value as any)}
-                                    className="w-full px-3 py-2 bg-item-bg border border-border-color rounded-lg text-sm focus:outline-none focus:border-primary"
+                                    className="input-field cursor-pointer"
                                 >
                                     <option value="daily">每天</option>
                                     <option value="weekly">每周</option>
@@ -135,7 +146,7 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
                             </div>
 
                             <div>
-                                <label className="block text-sm text-text-secondary mb-1">执行时间 (24h)</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">执行时间 (24h)</label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="number"
@@ -143,17 +154,17 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
                                         max="23"
                                         value={cronHour}
                                         onChange={e => setCronHour(parseInt(e.target.value))}
-                                        className="flex-1 px-3 py-2 border border-border-color rounded-lg text-center text-sm"
+                                        className="input-field text-center font-mono"
                                         placeholder="HH"
                                     />
-                                    <span className="text-text-secondary">:</span>
+                                    <span className="text-gray-400 font-bold">:</span>
                                     <input
                                         type="number"
                                         min="0"
                                         max="59"
                                         value={cronMinute}
                                         onChange={e => setCronMinute(parseInt(e.target.value))}
-                                        className="flex-1 px-3 py-2 border border-border-color rounded-lg text-center text-sm"
+                                        className="input-field text-center font-mono"
                                         placeholder="MM"
                                     />
                                 </div>
@@ -161,19 +172,20 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
                         </div>
 
                         {frequency === 'weekly' && (
-                            <div className="mt-3">
-                                <label className="block text-sm text-text-secondary mb-1">选择星期</label>
+                            <div className="mt-4">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">选择星期</label>
                                 <div className="flex gap-2">
                                     {['日', '一', '二', '三', '四', '五', '六'].map((day, idx) => (
                                         <button
                                             key={idx}
                                             onClick={() => setFrequencyValue(idx)}
                                             className={`
-                        flex-1 py-1.5 rounded-md text-xs font-medium border
-                        ${frequencyValue === idx
-                                                    ? 'bg-primary text-white border-primary'
-                                                    : 'bg-item-bg text-text-main border-transparent hover:border-border-color'}
-                      `}
+                                                flex-1 py-2 rounded-lg text-sm font-medium border transition-all
+                                                ${frequencyValue === idx
+                                                    ? 'bg-primary text-white border-primary shadow-sm'
+                                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                                                }
+                                            `}
                                         >
                                             {day}
                                         </button>
@@ -183,14 +195,14 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
                         )}
 
                         {frequency === 'interval' && (
-                            <div className="mt-3 flex items-center gap-3 text-sm">
-                                <span>每</span>
+                            <div className="mt-4 flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg border border-gray-100 dark:border-gray-800">
+                                <span>每隔</span>
                                 <input
                                     type="number"
                                     min="1"
                                     value={frequencyValue}
                                     onChange={e => setFrequencyValue(parseInt(e.target.value) || 1)}
-                                    className="w-20 px-3 py-1.5 border border-border-color rounded-lg text-center"
+                                    className="w-20 input-field text-center py-1.5"
                                 />
                                 <span>天执行一次</span>
                             </div>
@@ -199,47 +211,48 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
 
                     {/* 清理配置 */}
                     <section>
-                        <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-3">清理配置</h3>
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">清理配置</h3>
 
                         <div className="mb-4">
-                            <label className="block text-sm text-text-secondary mb-1">文件保留天数 (0表示不保留)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">文件保留天数 (0表示不保留)</label>
                             <input
                                 type="number"
                                 min="0"
                                 max="365"
                                 value={config.retainDays}
                                 onChange={e => setConfig({ ...config, retainDays: parseInt(e.target.value) || 0 })}
-                                className="w-full px-3 py-2 border border-border-color rounded-lg text-sm focus:outline-none focus:border-primary"
+                                className="input-field font-mono"
                             />
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                             {configOptions.map((opt) => (
-                                <label key={opt.key} className="flex items-center space-x-2 cursor-pointer group select-none">
+                                <label key={opt.key} className="flex items-center p-3 rounded-lg border border-gray-100 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                                     <input
                                         type="checkbox"
                                         checked={!!config[opt.key as keyof CleanerConfig]}
                                         onChange={(e) => setConfig({ ...config, [opt.key]: e.target.checked })}
-                                        className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+                                        className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary mr-3"
                                     />
-                                    <span className="text-sm text-text-main group-hover:text-primary transition-colors">{opt.label}</span>
+                                    <span className="text-sm text-gray-700 dark:text-gray-300">{opt.label}</span>
                                 </label>
                             ))}
                         </div>
                     </section>
                 </div>
 
-                <div className="p-6 border-t border-border-color flex justify-end gap-3 bg-bg-card sticky bottom-0 rounded-b-xl">
+                <div className="p-6 border-t border-gray-100 dark:border-gray-800 flex justify-end gap-3 bg-white dark:bg-[#1e1e20] sticky bottom-0 rounded-b-xl z-20">
                     <button
                         onClick={onClose}
-                        className="px-5 py-2.5 rounded-lg text-sm font-medium text-text-secondary hover:bg-item-bg transition-colors"
+                        className="btn btn-secondary"
                     >
                         取消
                     </button>
                     <button
                         onClick={handleSave}
-                        className="px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-white hover:bg-primary-hover shadow-sm transition-colors"
+                        className="btn btn-primary"
                     >
+                        <Save className="w-4 h-4" />
                         保存任务
                     </button>
                 </div>
