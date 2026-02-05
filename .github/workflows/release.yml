@@ -159,7 +159,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update Plugin Index and Create PR
+      - name: Upload to Plugin Index Release and Create PR
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
@@ -169,10 +169,40 @@ jobs:
           TAG_VERSION="${{ steps.version.outputs.version }}"
           PLUGIN_ID="napcat-plugin-cleaner"
           INDEX_REPO="NapNeko/napcat-plugin-index"
+          INDEX_RELEASE_TAG="v1.0.0"
           FORK_OWNER="${{ github.repository_owner }}"
           BRANCH_NAME="update-${PLUGIN_ID}-${TAG_VERSION}"
           
           echo "📦 Updating plugin index for ${PLUGIN_ID} to version ${VERSION}"
+          
+          # 上传插件 zip 到 napcat-plugin-index 的 release
+          echo "📤 Uploading plugin zip to ${INDEX_REPO} release ${INDEX_RELEASE_TAG}"
+          
+          # 先删除已存在的同名文件（如果有）
+          gh release delete-asset "${INDEX_RELEASE_TAG}" "${PLUGIN_ID}.zip" --repo "${INDEX_REPO}" --yes || true
+          
+          # 上传新的 zip 文件
+          gh release upload "${INDEX_RELEASE_TAG}" "../napcat-plugin-cleaner/${PLUGIN_ID}.zip" --repo "${INDEX_REPO}" --clobber
+          
+          echo "✅ Plugin zip uploaded successfully"
+          
+          # 更新 release 说明
+          RELEASE_BODY="# NapCat Plugin Index
+
+          ## 插件列表
+
+          - **napcat-plugin-builtin** - 内置插件
+          - **napcat-plugin-cleaner** - 清理插件 (${TAG_VERSION})
+
+          ---
+          
+          > 此 Release 用于托管 NapCat 插件资源文件
+          
+          **Full Changelog**: https://github.com/${INDEX_REPO}/commits/${INDEX_RELEASE_TAG}"
+          
+          gh release edit "${INDEX_RELEASE_TAG}" --repo "${INDEX_REPO}" --notes "${RELEASE_BODY}"
+          
+          echo "✅ Release notes updated"
           
           # 配置 git
           git config --global user.name "github-actions[bot]"
@@ -192,8 +222,8 @@ jobs:
           git fetch upstream main
           git checkout -B "${BRANCH_NAME}" upstream/main
           
-          # 更新 plugins.v4.json
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG_VERSION}/${PLUGIN_ID}.zip"
+          # 固定下载链接到 napcat-plugin-index 的 release
+          DOWNLOAD_URL="https://github.com/${INDEX_REPO}/releases/download/${INDEX_RELEASE_TAG}/${PLUGIN_ID}.zip"
           UPDATE_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
           # 使用 jq 更新版本号和下载链接
@@ -223,7 +253,8 @@ jobs:
 
           - **Plugin**: ${PLUGIN_ID}
           - **Version**: ${VERSION}
-          - **Release**: https://github.com/${{ github.repository }}/releases/tag/${TAG_VERSION}
+          - **Download**: ${DOWNLOAD_URL}
+          - **Source Release**: https://github.com/${{ github.repository }}/releases/tag/${TAG_VERSION}
 
           ---
           *This PR was automatically created by GitHub Actions.*"
