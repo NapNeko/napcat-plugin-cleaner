@@ -1,14 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { request } from './utils/api';
 import { Account, CleanerConfig, ScheduleTask } from './types';
+import { Card } from './components/ui/Card';
+import { Layout } from './components/Layout';
+import { Header } from './components/Header';
 import { AccountList } from './components/AccountList';
 import { StatsTable } from './components/StatsTable';
 import { ConfigPanel } from './components/ConfigPanel';
 import { ScheduleList } from './components/ScheduleList';
 import { CreateTaskModal } from './components/CreateTaskModal';
-import { Eraser, BarChart3, Settings, ShieldCheck, RefreshCw, LayoutDashboard, Clock, Save } from 'lucide-react';
+import { ToastContainer, ToastMessage, ToastType } from './components/ui/Toast';
+import { ConfirmModal } from './components/ui/ConfirmModal';
+import { Eraser, RefreshCw, Settings, Info, ArrowRight, ShieldCheck, Clock, HardDrive } from 'lucide-react';
+import { TabId } from './components/Sidebar';
 
 function App() {
+    // Data States
     const [loading, setLoading] = useState(true);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -26,10 +33,36 @@ function App() {
         retainDays: 7
     });
     const [schedules, setSchedules] = useState<ScheduleTask[]>([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    // UI States
+    const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [cleaning, setCleaning] = useState(false);
-    const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' } | null>(null);
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'tasks' | 'settings'>('dashboard');
+    
+    // Toast & Confirm States
+    const [toasts, setToasts] = useState<ToastMessage[]>([]);
+    const [confirmModal, setConfirmModal] = useState({
+        isOpen: false,
+        title: '',
+        description: '',
+        onConfirm: () => {},
+        type: 'danger' as 'danger' | 'info'
+    });
+
+    // Toast Helpers
+    const showToast = useCallback((text: string, type: ToastType = 'info') => {
+        const id = Date.now().toString() + Math.random().toString();
+        setToasts(prev => [...prev, { id, text, type }]);
+    }, []);
+
+    const removeToast = useCallback((id: string) => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+    }, []);
+
+    // Confirm Helper
+    const openConfirm = (title: string, description: string, onConfirm: () => void, type: 'danger' | 'info' = 'danger') => {
+        setConfirmModal({ isOpen: true, title, description, onConfirm, type });
+    };
 
     // Initial Data Fetch
     useEffect(() => {
@@ -48,7 +81,6 @@ function App() {
             if (accRes.code === 0) {
                 setAccounts(accRes.data.accounts);
                 if (selectedAccounts.length === 0 && accRes.data.accounts.length > 0) {
-                    // Default select current account or all
                     const current = accRes.data.accounts.find(a => a.isCurrent);
                     setSelectedAccounts(current ? [current.uin] : [accRes.data.accounts[0].uin]);
                 }
@@ -58,16 +90,17 @@ function App() {
             if (schedRes.code === 0) setSchedules(schedRes.data);
 
         } catch (e) {
-            showMessage('数据加载失败，请检查网络或刷新页面', 'error');
+            showToast('数据加载失败，请检查网络或刷新页面', 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    // Re-fetch stats when selected accounts or retain days change
+    // Re-fetch stats logic
     useEffect(() => {
         if (accounts.length > 0) {
-            updateStats();
+            const timer = setTimeout(() => updateStats(), 500); // Debounce
+            return () => clearTimeout(timer);
         }
     }, [config.retainDays, selectedAccounts]);
 
@@ -75,7 +108,6 @@ function App() {
         if (selectedAccounts.length === 0) return;
 
         const newAccounts = [...accounts];
-
         for (const uin of selectedAccounts) {
             try {
                 const res = await request<{ formattedStats: any }>(`/stats/${uin}?retainDays=${config.retainDays}`);
@@ -85,15 +117,12 @@ function App() {
                         newAccounts[idx] = { ...newAccounts[idx], stats: res.data.formattedStats };
                     }
                 }
-            } catch (e) { console.error(e); }
+            } catch (e) { 
+                console.error(e);
+            }
         }
-
+        
         setAccounts(newAccounts);
-    };
-
-    const showMessage = (text: string, type: 'success' | 'error' | 'info') => {
-        setMessage({ text, type });
-        setTimeout(() => setMessage(null), 4000);
     };
 
     const handleToggleAccount = (uin: string) => {
@@ -108,38 +137,45 @@ function App() {
                 method: 'POST',
                 body: JSON.stringify(config)
             });
-            showMessage('默认配置已保存', 'success');
+            showToast('默认配置已保存', 'success');
         } catch (e) {
-            showMessage('保存配置失败', 'error');
+            showToast('保存配置失败', 'error');
         }
     };
 
     const handleClean = async () => {
         if (selectedAccounts.length === 0) {
-            showMessage('请先选择要清理的账号', 'error');
+            showToast('请先选择要清理的账号', 'error');
             return;
         }
 
-        setCleaning(true);
-        showMessage('正在清理缓存文件，请稍候...', 'info');
+        openConfirm(
+            '确认立即清理？',
+            `即将清理选中的 ${selectedAccounts.length} 个账号。此操作不可撤销，请确认文件保留策略无误。`,
+            async () => {
+                setCleaning(true);
+                showToast('正在清理缓存文件，请稍候...', 'info');
 
-        try {
-            const res = await request<{ totalSize: string }>('/clean', {
-                method: 'POST',
-                body: JSON.stringify({ accounts: selectedAccounts, options: config })
-            });
+                try {
+                    const res = await request<{ totalSize: string }>('/clean', {
+                        method: 'POST',
+                        body: JSON.stringify({ accounts: selectedAccounts, options: config })
+                    });
 
-            if (res.code === 0) {
-                showMessage(`清理完成，释放空间: ${res.data.totalSize}`, 'success');
-                updateStats(); // Refresh stats
-            } else {
-                showMessage(`清理失败: ${res.message}`, 'error');
-            }
-        } catch (e) {
-            showMessage('请求失败', 'error');
-        } finally {
-            setCleaning(false);
-        }
+                    if (res.code === 0) {
+                        showToast(`清理完成，释放空间: ${res.data.totalSize}`, 'success');
+                        updateStats(); 
+                    } else {
+                        showToast(`清理失败: ${res.message}`, 'error');
+                    }
+                } catch (e) {
+                    showToast('请求失败', 'error');
+                } finally {
+                    setCleaning(false);
+                }
+            },
+            'info'
+        );
     };
 
     const handleCreateTask = async (task: Partial<ScheduleTask>) => {
@@ -151,23 +187,28 @@ function App() {
             const res = await request<ScheduleTask[]>('/schedules');
             if (res.code === 0) {
                 setSchedules(res.data);
-                showMessage('定时任务已添加', 'success');
-                setIsModalOpen(false);
+                showToast('定时任务已添加', 'success');
+                setIsCreateModalOpen(false);
             }
         } catch (e) {
-            showMessage('添加任务失败', 'error');
+            showToast('添加任务失败', 'error');
         }
     };
 
-    const handleDeleteTask = async (id: string) => {
-        if (!confirm('确定要删除此定时任务吗？')) return;
-        try {
-            await request(`/schedules/${id}`, { method: 'DELETE' });
-            setSchedules(prev => prev.filter(s => s.id !== id));
-            showMessage('任务已删除', 'success');
-        } catch (e) {
-            showMessage('删除失败', 'error');
-        }
+    const handleDeleteTask = (id: string) => {
+        openConfirm(
+            '删除定时任务',
+            '确定要删除此定时任务吗？此操作无法撤销。',
+            async () => {
+                try {
+                    await request(`/schedules/${id}`, { method: 'DELETE' });
+                    setSchedules(prev => prev.filter(s => s.id !== id));
+                    showToast('任务已删除', 'success');
+                } catch (e) {
+                    showToast('删除失败', 'error');
+                }
+            }
+        );
     };
 
     const handleToggleTask = async (id: string, enabled: boolean) => {
@@ -176,10 +217,10 @@ function App() {
                 method: 'POST',
                 body: JSON.stringify({ enabled })
             });
-
             setSchedules(prev => prev.map(s => s.id === id ? { ...s, enabled } : s));
+            showToast(enabled ? '任务已启用' : '任务已暂停', 'success');
         } catch (e) {
-            showMessage('更新状态失败', 'error');
+            showToast('更新状态失败', 'error');
         }
     };
 
@@ -187,151 +228,170 @@ function App() {
         try {
             const res = await request(`/schedules/${id}/run`, { method: 'POST' });
             if (res.code === 0) {
-                showMessage('任务已触发', 'success');
-                // Refresh schedules to see last run time
+                showToast('任务已触发', 'success');
                 const schedRes = await request<ScheduleTask[]>('/schedules');
                 if (schedRes.code === 0) setSchedules(schedRes.data);
             }
         } catch (e) {
-            showMessage('触发失败', 'error');
+            showToast('触发失败', 'error');
         }
     }
 
     if (loading && accounts.length === 0) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                <div className="w-8 h-8 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+            <div className="min-h-screen flex items-center justify-center bg-[#f3f4f6] dark:bg-[#09090b]">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-10 h-10 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
+                    <p className="text-gray-500 font-medium animate-pulse">正在加载 NapCat 数据...</p>
+                </div>
             </div>
         );
     }
 
+    const pageTitles: Record<TabId, { title: string; desc: string }> = {
+        dashboard: { title: '概览', desc: '查看插件运行状态' },
+        files: { title: '文件管理', desc: '清理指定账号的缓存文件' },
+        tasks: { title: '定时任务', desc: '自动化清理流程管理' },
+        settings: { title: '插件设置', desc: '全局清理策略配置' }
+    };
+
     return (
-        <div className="flex h-screen bg-gray-50 dark:bg-black text-gray-900 dark:text-gray-100 font-sans overflow-hidden">
-            {/* Sidebar */}
-            <div className="w-64 bg-white dark:bg-[#121214] border-r border-gray-100 dark:border-gray-800 flex flex-col pt-6 pb-4">
-                <div className="px-6 mb-8 flex items-center gap-3">
-                    <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-lg shadow-primary/30">
-                        <Eraser className="w-5 h-5 text-white" />
-                    </div>
-                    <span className="text-lg font-bold tracking-tight">NapCat Cleaner</span>
-                </div>
+        <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+            
+            <div className="flex flex-col h-full min-h-0">
+                <Header 
+                    title={pageTitles[activeTab].title} 
+                    description={pageTitles[activeTab].desc}
+                    actions={
+                        <button
+                            onClick={fetchData}
+                            className="p-2 text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                            title="刷新数据"
+                        >
+                            <RefreshCw className="w-5 h-5" />
+                        </button>
+                    }
+                />
 
-                <nav className="flex-1 px-4 space-y-1">
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`sidebar-item w-full ${activeTab === 'dashboard' ? 'active' : ''}`}
-                    >
-                        <LayoutDashboard size={18} />
-                        <span>概览</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('tasks')}
-                        className={`sidebar-item w-full ${activeTab === 'tasks' ? 'active' : ''}`}
-                    >
-                        <Clock size={18} />
-                        <span>定时任务</span>
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('settings')}
-                        className={`sidebar-item w-full ${activeTab === 'settings' ? 'active' : ''}`}
-                    >
-                        <Settings size={18} />
-                        <span>插件设置</span>
-                    </button>
-                </nav>
-
-                <div className="px-6 mt-auto">
-                    <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800">
-                        <h4 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider">存储状态</h4>
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">已清理空间</span>
-                            <span className="text-xs font-bold text-primary">-- MB</span>
+                <div className={`px-4 md:px-8 pb-8 page-enter flex-1 min-h-0 ${
+                    activeTab === 'dashboard' ? 'overflow-y-auto custom-scrollbar' : 'overflow-hidden flex flex-col'
+                }`}>
+                    {activeTab === 'dashboard' && (
+                    <div className="max-w-5xl mx-auto space-y-6 w-full py-2">
+                        {/* Welcome Card */}
+                        <div className="relative overflow-hidden bg-white dark:bg-[#1e1e20] p-8 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm group">
+                            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                                <ShieldCheck className="w-32 h-32 text-primary rotate-12" />
+                            </div>
+                            <div className="relative z-10">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-3">
+                                    欢迎使用 Cleaner
+                                    <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">v1.0.0</span>
+                                </h2>
+                                <p className="text-gray-500 dark:text-gray-400 max-w-2xl leading-relaxed">
+                                    这是一个专为 NapCat 设计的轻量级清理插件。您可以手动清理指定账号的缓存文件，或设置定时任务自动执行清理，释放您的磁盘空间。
+                                </p>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </div>
 
-            {/* Main Content */}
-            <main className="flex-1 overflow-auto">
-                <div className="max-w-5xl mx-auto px-8 py-8">
-
-                    {/* Top Bar */}
-                    <header className="flex items-center justify-between mb-8">
-                        <div>
-                            <h1 className="text-2xl font-bold">
-                                {activeTab === 'dashboard' && '仪表盘'}
-                                {activeTab === 'tasks' && '定时任务'}
-                                {activeTab === 'settings' && '插件设置'}
-                            </h1>
-                            <p className="text-sm text-gray-500 mt-1">管理您的 NapCat 清理配置</p>
-                        </div>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={fetchData}
-                                className="p-2 text-gray-500 hover:text-primary hover:bg-white dark:hover:bg-gray-800 rounded-lg transition-colors border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
-                                title="刷新数据"
-                            >
-                                <RefreshCw className="w-5 h-5" />
-                            </button>
-                        </div>
-                    </header>
-
-                    {/* Content Views */}
-                    <div className="space-y-6">
-
-                        {activeTab === 'dashboard' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                {/* Left Column: Selection & Stats */}
-                                <div className="lg:col-span-2 space-y-6">
-                                    <div className="glass-card p-6">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold flex items-center gap-2">
-                                                <ShieldCheck className="w-5 h-5 text-primary" />
-                                                账号列表
-                                            </h3>
-                                        </div>
-                                        <AccountList
-                                            accounts={accounts}
-                                            selectedAccounts={selectedAccounts}
-                                            onToggleAccount={handleToggleAccount}
-                                        />
+                        {/* Status Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {/* Account Stats */}
+                            <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('files')}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">已检测账号</p>
+                                        <h3 className="text-4xl font-bold text-gray-900 dark:text-white mt-3 font-mono">{accounts.length}</h3>
                                     </div>
-
-                                    <div className="glass-card p-6">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold flex items-center gap-2">
-                                                <BarChart3 className="w-5 h-5 text-primary" />
-                                                空间占用
-                                            </h3>
-                                            <div className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-gray-500">
-                                                自动统计
-                                            </div>
-                                        </div>
-                                        <StatsTable
-                                            accounts={accounts}
-                                            selectedAccounts={selectedAccounts}
-                                            retainDays={config.retainDays}
-                                        />
+                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-blue-500 group-hover:scale-110 transition-transform">
+                                        <ShieldCheck className="w-6 h-6" />
                                     </div>
                                 </div>
+                                <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
+                                    查看账号详情 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </div>
 
-                                {/* Right Column: Actions & Quick Config */}
-                                <div className="space-y-6">
-                                    <div className="glass-card p-6">
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="font-semibold flex items-center gap-2">
-                                                <Settings className="w-5 h-5 text-primary" />
-                                                清理选项
+                            {/* Task Stats */}
+                            <div className="bg-white dark:bg-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm hover:shadow-md transition-shadow cursor-pointer group" onClick={() => setActiveTab('tasks')}>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">定时任务</p>
+                                        <div className="flex items-baseline gap-2 mt-3">
+                                            <h3 className="text-4xl font-bold text-gray-900 dark:text-white font-mono">
+                                                {schedules.filter(s => s.enabled).length}
                                             </h3>
+                                            <span className="text-sm font-medium text-gray-400">/ {schedules.length} 总计</span>
                                         </div>
+                                    </div>
+                                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl text-purple-500 group-hover:scale-110 transition-transform">
+                                        <Clock className="w-6 h-6" />
+                                    </div>
+                                </div>
+                                <div className="flex items-center text-sm text-primary font-medium group-hover:underline">
+                                    管理任务 <ArrowRight className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" />
+                                </div>
+                            </div>
 
-                                        <ConfigPanel
-                                            config={config}
-                                            onChange={setConfig}
-                                            onSave={handleSaveDefaultConfig}
-                                        />
+                            {/* Quick Action */}
+                            <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-800/50 dark:to-[#1e1e20] rounded-2xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col justify-between h-48 shadow-sm">
+                                <div>
+                                    <h3 className="font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                                        <HardDrive className="w-5 h-5 text-gray-400" />
+                                        快速清理
+                                    </h3>
+                                    <p className="text-sm text-gray-500 leading-relaxed">
+                                        立即前往文件管理页面，选择账号并释放空间。
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setActiveTab('files')}
+                                    className="w-full py-2.5 bg-primary hover:bg-[#e05a80] text-white rounded-lg font-bold transition-all shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-[0.98] flex items-center justify-center gap-2"
+                                >
+                                    前往清理
+                                    <ArrowRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                                        <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
+                {activeTab === 'files' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full min-h-0">
+                        {/* Left Column - Stats (8/12 = 2/3) */}
+                        <div className="lg:col-span-8 lg:h-full lg:min-h-0">
+                            <StatsTable
+                                accounts={accounts}
+                                selectedAccounts={selectedAccounts}
+                                retainDays={config.retainDays}
+                                className="h-full"
+                            />
+                        </div>
+
+                        {/* Right Column - Accounts & Actions (4/12 = 1/3) */}
+                        <div className="lg:col-span-4 flex flex-col gap-4 lg:h-full lg:min-h-0">
+                            {/* Account List - Takes remaining space */}
+                            <div className="flex-1 min-h-0">
+                                <AccountList
+                                    accounts={accounts}
+                                    selectedAccounts={selectedAccounts}
+                                    onToggleAccount={handleToggleAccount}
+                                />
+                            </div>
+
+                            {/* Cleanup Actions - Fixed height/content */}
+                            <div className="flex-shrink-0">
+                                <Card 
+                                    title="清理操作" 
+                                    subtitle="执行清理与配置"
+                                >
+                                    <div className="space-y-6">
+                                        {/* Action Button */}
+                                        <div>
+                                            <p className="text-sm text-gray-500 mb-4">
+                                                将清理 <span className="text-primary font-bold">{selectedAccounts.length}</span> 个选中账号的文件。
+                                                <br />此操作不可撤销。
+                                            </p>
                                             <button
                                                 onClick={handleClean}
                                                 disabled={cleaning || selectedAccounts.length === 0}
@@ -339,7 +399,7 @@ function App() {
                                                     w-full py-3 rounded-lg font-bold text-white shadow-lg shadow-pink-500/20 transition-all transform active:scale-[0.98]
                                                     flex items-center justify-center gap-2
                                                     ${cleaning || selectedAccounts.length === 0
-                                                        ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed'
+                                                        ? 'bg-gray-300 dark:bg-gray-700 cursor-not-allowed shadow-none'
                                                         : 'bg-primary hover:bg-[#e05a80]'
                                                     }
                                                 `}
@@ -356,100 +416,82 @@ function App() {
                                                     </>
                                                 )}
                                             </button>
-                                            <p className="text-center text-xs text-gray-400 mt-2">
-                                                已选择: {selectedAccounts.length} 个账号
-                                            </p>
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
-                        {activeTab === 'tasks' && (
-                            <div className="glass-card p-6 min-h-[500px]">
-                                <div className="flex items-center justify-between mb-6">
-                                    <div>
-                                        <h3 className="font-semibold text-lg">定时任务</h3>
-                                        <p className="text-sm text-gray-500">自动化您的清理流程</p>
-                                    </div>
-                                    <button
-                                        onClick={() => setIsModalOpen(true)}
-                                        className="btn btn-primary text-sm"
-                                    >
-                                        + 新建任务
-                                    </button>
-                                </div>
-                                <ScheduleList
-                                    schedules={schedules}
-                                    onDelete={handleDeleteTask}
-                                    onToggle={handleToggleTask}
-                                    onRun={handleRunTask}
-                                    onCreate={() => setIsModalOpen(true)}
-                                />
-                            </div>
-                        )}
-
-                        {activeTab === 'settings' && (
-                            <div className="max-w-2xl">
-                                <div className="glass-card p-6">
-                                    <h3 className="font-semibold text-lg mb-4">全局配置</h3>
-                                    <div className="space-y-4">
-                                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                                            在此配置 NapCat Cleaner 插件的默认行为。
-                                        </p>
-                                        {/* Example settings */}
-                                        <div className="flex items-center justify-between py-3 border-b border-gray-100 dark:border-gray-800">
-                                            <div>
-                                                <div className="font-medium text-sm">默认保留策略</div>
-                                                <div className="text-xs text-gray-500">删除前保留文件的天数</div>
+                                        {/* Config Summary & Link */}
+                                        <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-500 flex items-center gap-1">
+                                                    保留天数
+                                                    <Info className="w-3 h-3 text-gray-400" />
+                                                </span>
+                                                <span className="font-mono font-bold text-gray-900 dark:text-gray-100">{config.retainDays} 天</span>
                                             </div>
-                                            <input
-                                                type="number"
-                                                value={config.retainDays}
-                                                onChange={(e) => setConfig({ ...config, retainDays: parseInt(e.target.value) || 0 })}
-                                                className="w-16 px-2 py-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded text-center text-sm"
-                                            />
-                                        </div>
-                                        <div className="py-4">
+                                            
                                             <button
-                                                onClick={handleSaveDefaultConfig}
-                                                className="btn btn-primary w-full sm:w-auto"
+                                                onClick={() => setActiveTab('settings')}
+                                                className="w-full flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group mt-2"
                                             >
-                                                <Save className="w-4 h-4" />
-                                                保存为默认配置
+                                                <div className="flex items-center gap-3">
+                                                    <Settings className="w-4 h-4 text-gray-500 group-hover:text-primary transition-colors" />
+                                                    <div className="text-left">
+                                                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">修改配置</div>
+                                                    </div>
+                                                </div>
+                                                <div className="text-gray-400 group-hover:text-primary transition-colors text-lg">›</div>
                                             </button>
                                         </div>
                                     </div>
-                                </div>
+                                </Card>
                             </div>
-                        )}
-
+                        </div>
                     </div>
-                </div>
-            </main>
+                )}
 
-            {/* Toast Message */}
-            {message && (
-                <div className={`
-                    fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-xl border font-medium text-sm flex items-center gap-3 animate-bounce-in
-                    ${message.type === 'success' ? 'bg-white dark:bg-gray-800 text-green-600 border-green-200 dark:border-green-900' : ''}
-                    ${message.type === 'error' ? 'bg-white dark:bg-gray-800 text-red-600 border-red-200 dark:border-red-900' : ''}
-                    ${message.type === 'info' ? 'bg-white dark:bg-gray-800 text-blue-600 border-blue-200 dark:border-blue-900' : ''}
-                `}>
-                    {message.type === 'success' && <div className="w-2 h-2 rounded-full bg-green-500"></div>}
-                    {message.type === 'error' && <div className="w-2 h-2 rounded-full bg-red-500"></div>}
-                    {message.text}
+                {activeTab === 'tasks' && (
+                    <div className="h-full min-h-0">
+                        <ScheduleList
+                            schedules={schedules}
+                            onDelete={handleDeleteTask}
+                            onToggle={handleToggleTask}
+                            onRun={handleRunTask}
+                            onCreate={() => setIsCreateModalOpen(true)}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'settings' && (
+                    <div className="h-full min-h-0">
+                        <ConfigPanel
+                            config={config}
+                            onChange={setConfig}
+                            onSave={handleSaveDefaultConfig}
+                        />
+                    </div>
+                )}
                 </div>
-            )}
+            </div>
+
+            {/* Overlays */}
+            <ToastContainer toasts={toasts} onRemove={removeToast} />
+            
+            <ConfirmModal
+                isOpen={confirmModal.isOpen}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                description={confirmModal.description}
+                type={confirmModal.type}
+            />
 
             <CreateTaskModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
                 onSave={handleCreateTask}
                 accounts={accounts}
                 defaultConfig={config}
             />
-        </div>
+        </Layout>
     );
 }
 
