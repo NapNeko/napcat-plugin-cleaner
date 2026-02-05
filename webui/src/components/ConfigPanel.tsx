@@ -1,5 +1,6 @@
 import { CleanerConfig } from '../types';
 import { Save, Info, Settings, Check } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface ConfigPanelProps {
     config: CleanerConfig;
@@ -44,7 +45,11 @@ export function ConfigPanel({ config, onChange, onSave }: ConfigPanelProps) {
     ];
 
     return (
-        <div className="bg-white dark:bg-[#1e1e20] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden flex flex-col h-full">
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-[#1e1e20] rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm overflow-hidden flex flex-col h-full"
+        >
             {/* Header */}
             <div className="flex-shrink-0 px-6 py-5 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-white dark:bg-[#1e1e20] z-10">
                 <div>
@@ -67,7 +72,7 @@ export function ConfigPanel({ config, onChange, onSave }: ConfigPanelProps) {
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-8 [&::-webkit-scrollbar]:hidden [scrollbar-width:none] [-ms-overflow-style:none]">
-                
+
                 {/* Retention Policy Card */}
                 <div className="bg-gradient-to-r from-primary/5 to-transparent p-5 rounded-xl border border-primary/10">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -96,8 +101,13 @@ export function ConfigPanel({ config, onChange, onSave }: ConfigPanelProps) {
 
                 {/* Config Groups */}
                 <div className="grid gap-8">
-                    {groups.map((group) => (
-                        <div key={group.title}>
+                    {groups.map((group, groupIndex) => (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: groupIndex * 0.1 }}
+                            key={group.title}
+                        >
                             <div className="mb-4">
                                 <h4 className="text-sm font-bold text-gray-900 dark:text-gray-100">{group.title}</h4>
                                 <p className="text-xs text-gray-500 mt-0.5">{group.description}</p>
@@ -106,12 +116,12 @@ export function ConfigPanel({ config, onChange, onSave }: ConfigPanelProps) {
                                 {group.items.map((opt) => {
                                     const isChecked = !!config[opt.key as keyof CleanerConfig];
                                     return (
-                                        <label 
-                                            key={opt.key} 
+                                        <label
+                                            key={opt.key}
                                             className={`
                                                 group flex items-center p-3.5 rounded-xl border cursor-pointer transition-all duration-200
-                                                ${isChecked 
-                                                    ? 'bg-primary/5 border-primary shadow-sm shadow-primary/5' 
+                                                ${isChecked
+                                                    ? 'bg-primary/5 border-primary shadow-sm shadow-primary/5'
                                                     : 'bg-white dark:bg-[#252528] border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                                                 }
                                             `}
@@ -140,10 +150,10 @@ export function ConfigPanel({ config, onChange, onSave }: ConfigPanelProps) {
                                     );
                                 })}
                             </div>
-                        </div>
+                        </motion.div>
                     ))}
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 }
