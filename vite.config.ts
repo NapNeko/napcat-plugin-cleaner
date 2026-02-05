@@ -87,7 +87,7 @@ function copyWebuiPlugin() {
     name: 'copy-webui',
     writeBundle() {
       try {
-        const webuiSource = resolve(__dirname, 'webui/dashboard.html');
+        const webuiSource = resolve(__dirname, 'webui/dist/dashboard.html');
         const webuiTargetDir = resolve(__dirname, 'dist/webui');
         const webuiTarget = resolve(webuiTargetDir, 'dashboard.html');
         const packageJsonSource = resolve(__dirname, 'package.json');

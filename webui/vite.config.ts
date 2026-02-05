@@ -10,10 +10,10 @@ function renameToDashboard(): Plugin {
         name: 'rename-to-dashboard',
         closeBundle() {
             const distPath = resolve(__dirname, 'dist/index.html')
-            const targetPath = resolve(__dirname, 'dashboard.html')
+            const targetPath = resolve(__dirname, 'dist/dashboard.html')
             if (fs.existsSync(distPath)) {
                 fs.copyFileSync(distPath, targetPath)
-                console.log('\n✓ 已生成 dashboard.html')
+                console.log('\n✓ 已在 dist 目录生成 dashboard.html')
             }
         }
     }
