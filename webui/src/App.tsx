@@ -258,7 +258,11 @@ function App() {
     };
 
     return (
-        <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+        <Layout
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            version={__APP_VERSION__}
+        >
 
             <div className="flex flex-col h-full min-h-0">
                 <Header
@@ -287,7 +291,7 @@ function App() {
                                 <div className="relative z-10">
                                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-3">
                                         欢迎使用 Cleaner
-                                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">v1.0.0</span>
+                                        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">Plugin</span>
                                     </h2>
                                     <p className="text-gray-500 dark:text-gray-400 max-w-2xl leading-relaxed">
                                         这是一个专为 NapCat 设计的轻量级清理插件。您可以手动清理指定账号的缓存文件，或设置定时任务自动执行清理，释放您的磁盘空间。

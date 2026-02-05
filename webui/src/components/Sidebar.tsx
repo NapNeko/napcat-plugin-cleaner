@@ -8,7 +8,7 @@ interface SidebarProps {
     version?: string;
 }
 
-export function Sidebar({ activeTab, onTabChange, version = '1.0.0' }: SidebarProps) {
+export function Sidebar({ activeTab, onTabChange, version }: SidebarProps) {
     const navItems = [
         { id: 'dashboard' as const, label: '概览', icon: LayoutDashboard },
         { id: 'files' as const, label: '文件管理', icon: HardDrive },
@@ -42,8 +42,8 @@ export function Sidebar({ activeTab, onTabChange, version = '1.0.0' }: SidebarPr
                             onClick={() => onTabChange(item.id)}
                             className={`
                                 sidebar-item group flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer mb-0.5 mx-2 text-sm font-medium transition-all duration-200
-                                ${isActive 
-                                    ? 'bg-primary/10 text-primary' 
+                                ${isActive
+                                    ? 'bg-primary/10 text-primary'
                                     : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200'
                                 }
                             `}
@@ -57,9 +57,9 @@ export function Sidebar({ activeTab, onTabChange, version = '1.0.0' }: SidebarPr
 
             {/* Footer */}
             <div className="p-4 border-t border-gray-100 dark:border-gray-800">
-                <a 
-                    href="https://github.com/napneko/napcat-plugin-cleaner" 
-                    target="_blank" 
+                <a
+                    href="https://github.com/napneko/napcat-plugin-cleaner"
+                    target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-2 px-3 py-2 text-xs text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
                 >

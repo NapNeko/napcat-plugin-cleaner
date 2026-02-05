@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import { viteSingleFile } from 'vite-plugin-singlefile'
 import { resolve } from 'path'
 import fs from 'fs'
+// 从 package.json 读取版本号
+import pkg from '../package.json'
 
 // 自定义插件：构建完成后将 index.html 重命名为 dashboard.html 并移动到 webui 根目录
 function renameToDashboard(): Plugin {
@@ -21,6 +23,9 @@ function renameToDashboard(): Plugin {
 
 export default defineConfig({
     plugins: [react(), viteSingleFile(), renameToDashboard()],
+    define: {
+        '__APP_VERSION__': JSON.stringify(pkg.version)
+    },
     base: './',
     resolve: {
         alias: {
