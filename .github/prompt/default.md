@@ -8,4 +8,4 @@
 2. 解压到 NapCat 的 `plugins` 目录
 3. 重启 NapCat
 
-其实你可以在 WebUI 中安装的...
+> 💡 你也可以在 NapCat WebUI 中直接安装插件。
