@@ -214,8 +214,13 @@ export function CreateTaskModal({ isOpen, onClose, onSave, accounts, defaultConf
                                         <input
                                             type="number"
                                             min="1"
+                                            max="24"
                                             value={frequencyValue}
-                                            onChange={e => setFrequencyValue(parseInt(e.target.value) || 1)}
+                                            onChange={(e) => {
+                                                let val = parseInt(e.target.value) || 1;
+                                                if (val > 24) val = 24; // 超过24天自动截断为24。以防止schedule-service.ts中的msUntilNextRun出现int32溢出
+                                                setFrequencyValue(val);
+                                            }}
                                             className="w-20 input-field text-center py-1.5"
                                         />
                                         <span>天执行一次</span>
